@@ -1,2 +1,10 @@
 __pycache__/
 *.pyc
+
+# JetBrains: per-user state (shareable project settings in .idea/ are committed)
+.idea/workspace.xml
+.idea/shelf/
+.idea/httpRequests/
+.idea/dbnavigator.xml
+.idea/dataSources*
+.idea/usage.statistics.xml
