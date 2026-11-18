@@ -85,9 +85,17 @@ class UnmetRequests(unittest.TestCase):
         self.assertEqual((r["ids"], r["for"], r["status"]), (["R-CON-A-2"], "CON-A-12", "open"))
         self.assertEqual((r["needed"], r["tried"], r["where"], r["effort"]), ("", "", "", ""))
 
-    def test_no_table_means_no_requests(self):
-        self.assertEqual(report_html.unmet_requests("# Debate state\n\n## Log\n"), [])
+    def test_no_table_is_not_the_same_as_every_request_met(self):
+        self.assertIsNone(report_html.unmet_requests("# Debate state\n\n## Log\n"))
         self.assertEqual(report_html.unmet_requests(state("")), [])
+
+    def test_status_is_read_by_its_leading_word_in_any_case(self):
+        text = state("| R-1 | nice-to-have | P-1 | Fulfilled | a | | | | e.txt |\n"
+                     "| R-2 | critical | P-2 | unavailable (user declined) | b | | | | |\n"
+                     "| R-3 | nice-to-have | P-3 | Partial | c | | | | |\n")
+        self.assertEqual([(r["ids"][0], r["status"]) for r in report_html.unmet_requests(text)],
+                         [("R-2", "unavailable"), ("R-3", "partial")])
+        self.assertEqual(report_html.problems, [])
 
 
 if __name__ == "__main__":

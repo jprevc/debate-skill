@@ -278,11 +278,14 @@ REQ_STATUS = ("open", "unavailable", "partial")  # the unmet ones, in the order 
 
 
 def unmet_requests(state_text):
-    """The Evidence Requests in state.md that are not met (open, unavailable, partial)."""
+    """The Evidence Requests in state.md that are not met (open, unavailable, partial).
+
+    None when state.md has no Evidence Requests table, which is not the same as every request met.
+    """
     m = re.search(r"^## Evidence Requests\s*\n(.*?)(?=^## |\Z)", state_text, re.S | re.M)
     rows = [ln.strip().strip("|").split("|") for ln in (m.group(1) if m else "").splitlines() if ln.strip().startswith("|")]
     if not rows:
-        return []
+        return None
     keys = [REQ_COLS.get(c.strip()) for c in rows[0]]
     out = []
     for cells in rows[1:]:
@@ -291,8 +294,10 @@ def unmet_requests(state_text):
         r = {k: "" for k in REQ_COLS.values()}
         r.update({k: c.strip() for k, c in zip(keys, cells) if k})
         r["ids"] = [i.strip() for i in re.sub(r"\s*\(merged\)\s*$", "", r["ids"], flags=re.I).split("+")]
-        if re.match(r"fulfilled\s*\(partial", r["status"], re.I):
-            r["status"] = "partial"
+        # the status is read by its leading word, in any case: "Fulfilled", "unavailable (user declined)";
+        # the older "fulfilled (partial)" means partial
+        word = re.match(r"[a-z-]*", r["status"].lower()).group(0)
+        r["status"] = "partial" if re.match(r"fulfilled\s*\(partial", r["status"], re.I) else (word or r["status"])
         missing = re.search(r"\bStill missing:\s*(.*)", r["fulfilled"], re.I | re.S)
         r["missing"] = missing.group(1).strip() if missing else ""
         if r["status"] == "fulfilled":

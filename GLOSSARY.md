@@ -56,7 +56,7 @@ _Avoid_: Bibliography, source list
 An Advocate's request for Evidence it cannot obtain itself and the user must supply.
 _Avoid_: Help request
 
-**Partly fulfilled**:
+**Partly Fulfilled**:
 The status of an Evidence Request where some of the requested Evidence was obtained and the rest is still missing. It counts as unmet, alongside open and unavailable.
 _Avoid_: Fulfilled (partial)
 

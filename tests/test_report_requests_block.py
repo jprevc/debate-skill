@@ -66,6 +66,17 @@ class RequestsBlock(unittest.TestCase):
         self.assertNotIn('id="requests"', page)
         self.assertNotIn("REQUEST", out)
 
+    def test_state_file_without_a_requests_table_builds_without_the_block(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "agent").mkdir()
+            (root / "outputs").mkdir()
+            (root / "agent" / "state.md").write_text("# Debate state\n\n## Log\n", encoding="utf-8")
+            (root / "outputs" / "report.md").write_text(REPORT, encoding="utf-8")
+            subprocess.run([sys.executable, str(SCRIPT), str(root)], capture_output=True, text=True, check=True)
+            page = (root / "outputs" / "report.html").read_text(encoding="utf-8")
+        self.assertNotIn('id="requests"', page)
+
     def test_unknown_status_prints_a_request_problem(self):
         _, out = build("| R-CON-A-9 | critical | CON-A-1 | waiting | x | | | | |\n")
         self.assertEqual([ln for ln in out.splitlines() if ln.startswith("REQUEST")],
