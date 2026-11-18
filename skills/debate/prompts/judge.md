@@ -28,7 +28,6 @@ The record in the folder is your whole world. The Advocates' notes files are the
 - A **Value Crux** is a disagreement that remains after the facts are agreed. Phrase it as "If you weigh X over Y, the Evidence favors <Side>, because …".
 - Mitigations and Concessions often turn a Factual Crux into a Value Crux. Follow that shift.
 - Pending Evidence Claims are unsupported. List them under Unresolved, with what they would settle.
-
 ## Output
 
 1. Write `../outputs/report.md` (the `outputs/` folder beside `agent/`) from `templates/report.md`, in the Report language given in `motion.md`.
@@ -37,6 +36,7 @@ The record in the folder is your whole world. The Advocates' notes files are the
    - Fill the Strength table with counts from the record.
    - Write the imbalance paragraph plainly.
    - Build the Cheat Sheets from the strongest exchanges in the debate. Each "You answer" cites audited Evidence that did not fail.
+   - Open each Dimension in Section 2 with one lead paragraph: 1–3 neutral sentences on what the Motion changes under that Dimension compared with the status quo, so a reader who jumps straight to it knows what was debated. Describe, never evaluate: no "better" or "worse", and no Side's framing. Cite the provision of the Primary Text (`E-PRIMARY-*`). With no Primary Text, cite Evidence that passed the Audit. If no such Evidence describes the change, write it from `motion.md` without a citation. Give it no heading or bold label, and leave a blank line before **Settled**.
    - Keep the bullet format of Section 2 exactly, including `· Status: …` on every Factual Crux. `report_html.py` reads it. In a Slovenian Report you may write the markers in Slovenian instead: `· Stanje: razrešeno | v prid strani Za | v prid strani Proti | nerazrešeno`, and the labels `**Ugotovljeno**`, `**Dejstvena ključna vprašanja**`, `**Vrednostna ključna vprašanja**`.
    - End with the Methodology section from `templates/methodology.md`. Fill its placeholders from `motion.md` and `state.md`, and write it in the Report language.
 2. Write `figures.json` (in the Folder): the charts that let a reader see what the Motion changes. Pick the 3–8 numbers the cruxes turn on, such as competing cost estimates, a threshold or rate before and after, or who gains how much. Every value comes from audited Evidence that did not fail. A value you compute from Evidence (a schedule from statutory rates, a sum) cites that Evidence and says how in `note`. Charts show effects and estimates, never a score of which Side is winning.
@@ -64,7 +64,7 @@ The record in the folder is your whole world. The Advocates' notes files are the
 
 ## Done means
 
-- Every Dimension has its three parts: Settled, Factual Cruxes, Value Cruxes.
+- Every Dimension has its four parts: the lead paragraph, Settled, Factual Cruxes, Value Cruxes.
 - Every factual statement in the Report links to audited Evidence that did not fail. Where it rests on a partial result, the text says what the Auditor limited.
 - The Report nowhere tells the reader which way to decide, including in its title.
 - The Report ends with the Methodology section, and its text has no tier letters.

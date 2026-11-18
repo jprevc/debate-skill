@@ -797,6 +797,7 @@ def render_body(report_md, figures_by_dim):
     # the page header carries the disclaimer, and a date like "17. 11. 2026" would render as a list
     md = md[md.index("\n## ") + 1:] if "\n## " in md else md
     md = re.sub(r"^(?![ \t]*[-*] |[ \t]*\d+\. )(.+)\n(?=[ \t]*(?:[-*]|\d+\.) )", r"\1\n\n", md, flags=re.M)  # lists need a blank line before them
+    md = re.sub(rf"^(.+)\n(?=\*\*(?:{LABEL_RE})\*\*)", r"\1\n\n", md, flags=re.M)  # so do crux labels, or a lead paragraph swallows them
     md = link_ids(md)
     body = markdown.markdown(md, extensions=["tables", "sane_lists"])
     # Evidence links, however the Report wrote the path (evidence/… or ../agent/evidence/…), point at EVDIR
@@ -804,11 +805,19 @@ def render_body(report_md, figures_by_dim):
     body = re.sub(STATUS_MARK, lambda m: f'<span class="status">{esc(T(STATUS_WORDS[m.group(1)]))}</span>', body)
     body = re.sub(rf"<strong>({LABEL_RE})</strong>(?: \([^)]*\))?", lambda m: f"<strong>{esc(T('label_' + LABEL_WORDS[m.group(1)]))}</strong>", body)
 
+    # section 2: a paragraph between a Dimension heading and its first label is its lead paragraph,
+    # styled as a lede, with the Dimension's figures after it
+    sec2 = re.search(r"<h2>2\..*?(?=<h2>|\Z)", body, re.S)
+    sec2 = sec2.span() if sec2 else (0, 0)
+
     def h3(m):
         name = html.unescape(m.group(1))
         anchor = "dim-" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-        return f'<h3 id="{anchor}">{m.group(1)}</h3>' + "".join(figures_by_dim.pop(name, []))
-    body = re.sub(r"<h3>(.+?)</h3>", h3, body)
+        lead = m.group(2) or ""
+        if sec2[0] <= m.start() < sec2[1]:
+            lead = lead.replace("<p>", '<p class="lede">', 1)
+        return f'<h3 id="{anchor}">{m.group(1)}</h3>' + lead + "".join(figures_by_dim.pop(name, []))
+    body = re.sub(rf"<h3>(.+?)</h3>(\s*<p>(?!<strong>(?:{LABEL_RE})</strong>).*?</p>)?", h3, body, flags=re.S)
     body = re.sub(rf"<h2>((?:\d+\. )?{re.escape(T('method_word'))}\b)", r'<h2 id="methodology">\1', body, count=1)
     return body
 
