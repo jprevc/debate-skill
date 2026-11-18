@@ -24,7 +24,7 @@ The main agent stops after each Stage and asks before starting the next. When an
 ## Requirements
 
 - Claude Code
-- `python3` (3.10+) and [`uv`](https://docs.astral.sh/uv/) (runs the scripts with their pinned dependencies)
+- `python3` (3.12+) and [`uv`](https://docs.astral.sh/uv/) (runs the scripts with their pinned dependencies)
 - `pdftotext` (poppler-utils) for PDF sources
 - Chromium for JavaScript sites (`evidence.py fetch --render`): `uvx playwright@1.65.2 install chromium`
 

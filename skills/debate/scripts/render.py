@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.12"
 # dependencies = ["playwright==1.65.2"]
 # ///
 """Render a JavaScript page in headless Chromium and print it as JSON on stdout.
