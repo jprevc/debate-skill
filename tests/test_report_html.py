@@ -1,6 +1,6 @@
 #!/usr/bin/env -S uv run --quiet --script
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.12"
 # dependencies = ["markdown==3.7", "pytest==9.2.0"]
 # ///
 """Tests for skills/debate/scripts/report_html.py. Run: uv run --script tests/test_report_html.py"""

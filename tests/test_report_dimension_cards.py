@@ -1,6 +1,6 @@
 #!/usr/bin/env -S uv run --quiet --script
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.12"
 # dependencies = ["markdown==3.7", "pytest==9.2.0"]
 # ///
 """Section 2 of the HTML Report: each Dimension is a numbered card, with a jump list and small block labels.
