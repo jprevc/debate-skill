@@ -678,6 +678,13 @@ header.top .motion{color:var(--ink2);font-size:14px;margin:0 0 12px}header.top .
 header.top .meta{color:var(--ink2);font-size:14px}
 .notice{border-left:3px solid var(--axis);padding:8px 14px;color:var(--ink2);margin:16px 0}
 nav.toc{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;margin:12px 0 0}
+.tabbed nav.toc{position:relative;flex-wrap:nowrap;gap:0;margin-top:20px;overflow-x:auto;scrollbar-width:thin;box-shadow:inset 0 -1px var(--grid)}
+.tabbed nav.toc a{flex:none;padding:8px 14px;white-space:nowrap;text-decoration:none;color:var(--ink2);border-bottom:2px solid transparent}
+.tabbed nav.toc a:hover{color:var(--ink)}.tabbed nav.toc a[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--link)}
+.tabbed nav.toc a:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+.tabbed header.top{margin-bottom:0}.panel:focus{outline:none}.panel:focus-visible{outline:2px solid var(--axis);outline-offset:8px}
+.tabbed nav.toc .jump{display:none}
+@media print{nav.toc,#tip,dialog{display:none!important}.panel[hidden]{display:block!important}}  /* !important: beats the [hidden] rule and the tip's inline display */
 a{color:var(--link)}h2{font-size:22px;margin:48px 0 8px}h3{font-size:18px;margin:36px 0 8px;scroll-margin-top:16px}
 .lede{color:var(--ink2);margin-top:0}
 figure{margin:20px 0;background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:16px 16px 10px}
@@ -744,6 +751,38 @@ document.addEventListener('click',e=>{const a=e.target.closest('[data-ev]');if(!
  if(openEv(id))e.preventDefault();});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'){const a=e.target.closest('svg [data-ev]');if(a)openEv(a.dataset.ev.split(',')[0].trim());}});
 dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close();});
+// Tabs: without this script the page is one stacked page and the nav is a jump menu.
+const nav=document.querySelector('nav.toc');
+const tabs=[...nav.querySelectorAll('a:not(.jump)')];
+const keys=tabs.map(a=>a.getAttribute('href').slice(1));
+const panels=keys.map(k=>document.getElementById('panel-'+k));
+document.documentElement.classList.add('tabbed');
+nav.setAttribute('role','tablist');
+keys.forEach((k,i)=>{const a=tabs[i],p=panels[i];a.id='tab-'+k;a.setAttribute('role','tab');a.setAttribute('aria-controls',p.id);
+ p.setAttribute('role','tabpanel');p.setAttribute('aria-labelledby',a.id);p.tabIndex=0;
+ // the jump menu's target for #<key> would make the browser scroll past the tab bar
+ const t=document.getElementById(k);if(t)t.removeAttribute('id');});
+let cur=-1;
+function show(i){cur=i;tabs.forEach((a,j)=>{a.setAttribute('aria-selected',String(i===j));a.tabIndex=i===j?0:-1;panels[j].hidden=i!==j;});
+ const a=tabs[i];if(a.offsetLeft<nav.scrollLeft||a.offsetLeft+a.offsetWidth>nav.scrollLeft+nav.clientWidth)nav.scrollLeft=a.offsetLeft-16;}
+// a hash names a tab, or an element inside a panel (el); i is the panel to open, -1 if neither
+function locate(h){const i=keys.indexOf(h);if(i>=0||!h)return {el:null,i};let el=null;try{el=document.getElementById(decodeURIComponent(h));}catch(_){}
+ const p=el&&el.closest('.panel');return {el,i:p?panels.indexOf(p):-1};}
+function route(){const t=locate(location.hash.slice(1));show(t.i<0?0:t.i);if(t.el)t.el.scrollIntoView();}
+// open a tab as a new history entry (back/forward return to it)
+function select(i){if(i!==cur){history.pushState(null,'','#'+keys[i]);show(i);}}
+nav.addEventListener('click',e=>{const a=e.target.closest('[role=tab]');if(!a)return;e.preventDefault();select(tabs.indexOf(a));});
+nav.addEventListener('keydown',e=>{const i=tabs.indexOf(e.target);if(i<0)return;
+ const j={ArrowRight:(i+1)%tabs.length,ArrowLeft:(i-1+tabs.length)%tabs.length,Home:0,End:tabs.length-1}[e.key];
+ if(j===undefined)return;e.preventDefault();select(j);tabs[j].focus();});
+// an in-page link to a tab opens it at the top; a link into another panel opens that panel first, so the browser can scroll to it
+document.addEventListener('click',e=>{const a=e.target.closest('a[href^="#"]');if(!a||nav.contains(a))return;
+ const t=locate(a.getAttribute('href').slice(1));if(t.i<0)return;
+ if(!t.el){e.preventDefault();select(t.i);if(nav.getBoundingClientRect().top<0)nav.scrollIntoView();}
+ else if(t.i!==cur)show(t.i);},true);
+addEventListener('popstate',route);
+route();
+if(keys.includes(location.hash.slice(1)))scrollTo(0,0);  // undo the browser's jump to the old target on load
 """
 
 
@@ -846,16 +885,29 @@ def main():
     # the heading is the Report's own (neutral) title; the Motion is shown below it, labelled
     heading = re.sub(r"^(?:Debate Report|Poročilo o razpravi): ", "", title)
     mline = f'<p class="motion"><span>{esc(T("motion_label"))}</span> {esc(motion)}</p>' if motion else ""
-    method = '<a href="#methodology">' + esc(T("nav_method")) + "</a>" if 'id="methodology"' in body else ""
+    # Methodology gets its own tab; report.md keeps it in place. Everything from its heading on is taken,
+    # since the methodology template puts it last (section 8).
+    cut = body.find('<h2 id="methodology">')
+    body, method = (body[:cut], body[cut:]) if cut >= 0 else (body, "")
+    # Tabs in order: (key = URL hash and the id of an element in the panel, label key, panel content).
+    # A tab with no content is not shown; a later tab is one more entry here.
+    tabs = [(k, label, content) for k, label, content in [
+        ("report", "nav_report", f'<article id="report"><h2>{esc(T("nav_report"))}</h2>{body}</article>'),
+        ("record", "nav_record", record_charts(ev, claims, concessions, cruxes, domain_tiers) + key),
+        ("methodology", "nav_method", f'<article class="method">{method}</article>' if method else ""),
+    ] if content]
+    # each tab's content must keep an element with id=key: the link is the jump-menu target without JavaScript
+    nav = "".join(f'<a href="#{k}">{esc(T(label))}</a>'
+                  + (f'<a class="jump" href="#figures">{esc(T("nav_figures"))}</a>' if k == "record" and general else "")
+                  for k, label, _ in tabs)
+    panels = "\n".join(f'<div class="panel" id="panel-{k}">{content}</div>' for k, _, content in tabs)
     ui = dict(T("dlg"), results={k: T(k) for k in AUDIT}, evdir=EVDIR)
     page = f"""<!doctype html><html lang="{UI['lang']}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(heading[:100])}</title><style>{CSS}</style></head><body><main>
 <header class="top"><div class="kicker">{esc(T("kicker"))}</div><h1>{esc(heading)}</h1>{mline}
 <div class="notice">{esc(T("notice"))}</div>
-<nav class="toc"><a href="#record">{esc(T("nav_record"))}</a>{f'<a href="#figures">{esc(T("nav_figures"))}</a>' if general else ''}<a href="#report">{esc(T("nav_report"))}</a>{method}</nav></header>
-{record_charts(ev, claims, concessions, cruxes, domain_tiers)}
-{key}
-<article id="report"><h2>{esc(T("nav_report"))}</h2>{body}</article>
+<nav class="toc">{nav}</nav></header>
+{panels}
 </main><div id="tip" role="tooltip"></div><dialog id="evdlg"></dialog>
 <script type="application/json" id="evdata">{json.dumps(evdata, ensure_ascii=False).replace("</", "<\\/")}</script>
 <script type="application/json" id="uidata">{json.dumps(ui, ensure_ascii=False).replace("</", "<\\/")}</script>
