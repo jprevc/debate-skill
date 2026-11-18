@@ -73,5 +73,7 @@ skills/debate/         the skill itself (everything that gets installed)
                        project README.md and CLAUDE.md
   scripts/             evidence.py (fetch, quote, verify, pxweb), ledger.py (checks),
                        report_html.py (HTML report), render.py (headless Chromium)
+tests/                 tests for the scripts (not installed); run them with
+                       uv run --with markdown==3.7 --with pytest==9.2.0 pytest tests
 GLOSSARY.md, docs/     domain glossary, ADRs and agent docs for developing the skill
 ```
