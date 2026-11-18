@@ -28,7 +28,7 @@ Prints problems one per line, like ledger.py:
            failed the Audit or was never audited
   CAPTION  a figure's caption or note states a number (a rate, or an amount of 100 or
            more) that is neither in the figure's data nor in its Evidence quotes
-  STATUS   a Factual Crux in the Report lacks its "· Status: …" marker
+  STATUS   an Open Question in the Report lacks its "· Status: …" marker
   LANG     the Report language has no interface strings; English is used
   REQUEST  an Evidence Request in state.md has a status other than open, partial,
            fulfilled or unavailable; it is shown as open
@@ -73,17 +73,17 @@ STRINGS = {
         "items": "pieces of Evidence", "of": "of", "table_view": "Table view",
         "claims_word": "Claims", "concessions": "Concessions", "pending": "still pending Evidence",
         "crux_title": "Where each Dimension stands",
-        "crux_sub": "Settled facts, Factual Cruxes by status, and Value Cruxes: the questions only your priorities can answer",
-        "crux_cols": ("Dimension", "Settled", "Factual Cruxes", "Value Cruxes"), "none": "none",
+        "crux_sub": "Settled facts, open questions by status, and what depends on your values: the questions only your priorities can answer",
+        "crux_cols": ("Dimension", "Settled", "Open questions", "Depends on your values"), "none": "none",
         "no_figure": "no figure", "evidence_col": " (Evidence)",
         "figures_lede": "What the act changes, in numbers. Every value comes from audited Evidence; hover a mark for its source, click it to read the quote.",
         "evidence_label": "Evidence",
         "PRO": "Pro", "CON": "Con",
         "passed": "passed", "partial": "partial", "failed": "failed", "not audited": "not audited",
-        "settled": "settled", "leaning Pro": "leaning Pro", "leaning Con": "leaning Con", "unsettled": "unsettled", "value crux": "value crux",
+        "settled": "settled", "leaning Pro": "leaning Pro", "leaning Con": "leaning Con", "unsettled": "unsettled", "value question": "value question",
         "Factual": "factual", "Inference": "inference", "Predictive": "predictive", "Value": "value",
         "Side": "Side", "Category": "Category", "Series": "Series", "Evidence": "Evidence",
-        "label_Settled": "Settled", "label_Factual Cruxes": "Factual Cruxes", "label_Value Cruxes": "Value Cruxes",
+        "label_Settled": "Settled", "label_Open questions": "Open questions", "label_Value questions": "Depends on your values",
         "about": "About", "close": "Close",
         "dlg": {"quote": "Quote", "translation": "Translation", "close": "Close", "source": "source", "file": "Evidence file",
                 "audit": "Audit", "tier": "Source Tier", "found": "Quote found", "supports": "Supports", "cherry": "Cherry-picked",
@@ -131,17 +131,17 @@ STRINGS = {
         "items": "dokazov", "of": "od", "table_view": "Prikaz v tabeli",
         "claims_word": "trditev", "concessions": "priznanj", "pending": "trditev še čaka na dokaze",
         "crux_title": "Stanje po področjih",
-        "crux_sub": "Razrešena dejstva, dejstvena ključna vprašanja po stanju in vrednostna ključna vprašanja: vprašanja, na katera lahko odgovorijo le vaše prioritete",
-        "crux_cols": ("Področje", "Razrešeno", "Dejstvena ključna vprašanja", "Vrednostna ključna vprašanja"), "none": "jih ni",
+        "crux_sub": "Razrešena dejstva, odprta vprašanja po stanju in kar je odvisno od vaših vrednot: vprašanja, na katera lahko odgovorijo le vaše prioritete",
+        "crux_cols": ("Področje", "Razrešeno", "Odprta vprašanja", "Odvisno od vaših vrednot"), "none": "jih ni",
         "no_figure": "ni podatka", "evidence_col": " (dokazi)",
         "figures_lede": "Kaj zakon spreminja, v številkah. Vsaka vrednost izhaja iz preverjenih dokazov; za vir se z miško postavite na oznako, s klikom preberete navedek.",
         "evidence_label": "Dokazi",
         "PRO": "Za", "CON": "Proti",
         "passed": "ustreza", "partial": "delno ustreza", "failed": "ne ustreza", "not audited": "ni preverjeno",
-        "settled": "razrešeno", "leaning Pro": "v prid strani Za", "leaning Con": "v prid strani Proti", "unsettled": "nerazrešeno", "value crux": "vrednostno vprašanje",
+        "settled": "razrešeno", "leaning Pro": "v prid strani Za", "leaning Con": "v prid strani Proti", "unsettled": "nerazrešeno", "value question": "vrednostno vprašanje",
         "Factual": "dejstvenih", "Inference": "sklepov", "Predictive": "napovedi", "Value": "vrednostnih",
         "Side": "Stran", "Category": "Kategorija", "Series": "Niz", "Evidence": "Dokazi",
-        "label_Settled": "Ugotovljeno", "label_Factual Cruxes": "Dejstvena ključna vprašanja", "label_Value Cruxes": "Vrednostna ključna vprašanja",
+        "label_Settled": "Ugotovljeno", "label_Open questions": "Odprta vprašanja", "label_Value questions": "Odvisno od vaših vrednot",
         "about": "Pojasnilo", "close": "Zapri",
         "dlg": {"quote": "Navedek", "translation": "Prevod", "close": "Zapri", "source": "vir", "file": "Datoteka dokaza",
                 "audit": "Preverjanje", "tier": "Raven vira", "found": "Navedek najden", "supports": "Podpira", "cherry": "Selektivno izbran",
@@ -190,7 +190,11 @@ def T(k):
 STATUS_WORDS = {w: k for lang in STRINGS.values() for k in STATUS for w in (k, lang[k])}
 STATUS_RE = "|".join(sorted(map(re.escape, STATUS_WORDS), key=len, reverse=True))
 STATUS_MARK = rf"· (?:Status|Stanje): ({STATUS_RE})\b(?: \([^)]*\))?"
-LABEL_WORDS = {lang[f"label_{k}"]: k for lang in STRINGS.values() for k in ("Settled", "Factual Cruxes", "Value Cruxes")}
+BLOCKS = ("Settled", "Open questions", "Value questions")
+# Labels older Reports used before Open Questions and Value Questions were renamed; still read.
+LEGACY_LABELS = {"Factual Cruxes": "Open questions", "Dejstvena ključna vprašanja": "Open questions",
+                 "Value Cruxes": "Value questions", "Vrednostna ključna vprašanja": "Value questions"}
+LABEL_WORDS = {lang[f"label_{k}"]: k for lang in STRINGS.values() for k in BLOCKS} | LEGACY_LABELS
 LABEL_RE = "|".join(sorted(map(re.escape, LABEL_WORDS), key=len, reverse=True))
 
 
@@ -326,7 +330,7 @@ def read_motion(folder, lang=None):
 
 
 def crux_map(report):
-    """Per Dimension: settled count, factual crux statuses, value crux count."""
+    """Per Dimension: settled count, Open Question statuses, Value Question count."""
     sec = re.search(r"^## 2\..*?\n(.*?)(?=^## 3\.|\Z)", report, re.S | re.M)
     out = []
     for m in re.finditer(r"^### (.+?)\n(.*?)(?=^### |\Z)", sec.group(1) if sec else "", re.S | re.M):
@@ -334,14 +338,14 @@ def crux_map(report):
         parts = {LABEL_WORDS[k]: v for k, v in re.findall(rf"^\*\*({LABEL_RE})\*\*(?: \([^)]*\))?:?(.*?)(?=^\*\*(?:{LABEL_RE})\*\*|\Z)", body, re.S | re.M)}
         bullets = lambda t: [b for b in re.findall(r"^\s*[-*] (.+)$", t or "", re.M)]  # noqa: E731
         statuses = []
-        for b in bullets(parts.get("Factual Cruxes")):
+        for b in bullets(parts.get("Open questions")):
             s = re.search(STATUS_MARK, b)
             if s:
                 statuses.append(STATUS_WORDS[s.group(1)])
             else:
-                problems.append(f"STATUS {dim}: Factual Crux without '· Status: …' — {b[:80]}")
+                problems.append(f"STATUS {dim}: Open Question without '· Status: …' — {b[:80]}")
         out.append({"dim": dim, "settled": len(bullets(parts.get("Settled"))),
-                    "factual": statuses, "value": len(bullets(parts.get("Value Cruxes")))})
+                    "factual": statuses, "value": len(bullets(parts.get("Value questions")))})
     return out
 
 
@@ -498,10 +502,10 @@ def record_charts(ev, claims, concessions, cruxes, domain_tiers, reqs=None):
         for c in cruxes:
             chips = "".join(f'<i class="chip" style="--c:{st_col[s]}" data-tip="{esc(T(s))}" tabindex="0"></i>' for s in c["factual"]) or f'<span class="muted">{T("none")}</span>'
             anchor = "dim-" + re.sub(r"[^a-z0-9]+", "-", c["dim"].lower()).strip("-")
-            vchips = f'<i class="vchip" data-tip="{esc(T("value crux"))}" tabindex="0"></i>' * c["value"] or f'<span class="muted">{T("none")}</span>'
+            vchips = f'<i class="vchip" data-tip="{esc(T("value question"))}" tabindex="0"></i>' * c["value"] or f'<span class="muted">{T("none")}</span>'
             out.append(f'<tr><td><a href="#{anchor}">{esc(c["dim"])}</a></td><td class="num">{c["settled"]}</td><td>{chips}</td>'
                        f'<td>{vchips}</td></tr>')
-        out.append("</tbody></table>" + legend([(k, st_col[k]) for k in STATUS] + [("value crux", "var(--value)")]) + "</figure>")
+        out.append("</tbody></table>" + legend([(k, st_col[k]) for k in STATUS] + [("value question", "var(--value)")]) + "</figure>")
     if reqs is not None:
         out.append(requests_html(reqs))
     out.append("</section>")
@@ -879,18 +883,28 @@ def render_body(report_md, figures_by_dim):
     # the page header carries the disclaimer, and a date like "17. 11. 2026" would render as a list
     md = md[md.index("\n## ") + 1:] if "\n## " in md else md
     md = re.sub(r"^(?![ \t]*[-*] |[ \t]*\d+\. )(.+)\n(?=[ \t]*(?:[-*]|\d+\.) )", r"\1\n\n", md, flags=re.M)  # lists need a blank line before them
+    md = re.sub(rf"^(.+)\n(?=\*\*(?:{LABEL_RE})\*\*)", r"\1\n\n", md, flags=re.M)  # so do crux labels, or a lead paragraph swallows them
     md = link_ids(md)
     body = markdown.markdown(md, extensions=["tables", "sane_lists"])
     # Evidence links, however the Report wrote the path (evidence/… or ../agent/evidence/…), point at EVDIR
     body = re.sub(rf'<a href="(?:[\w.%-]+/)*evidence/({EID})\.md">', lambda m: f'<a class="ev" href="{EVDIR}/{m.group(1)}.md" data-ev="{m.group(1)}">', body)
     body = re.sub(STATUS_MARK, lambda m: f'<span class="status">{esc(T(STATUS_WORDS[m.group(1)]))}</span>', body)
-    body = re.sub(rf"<strong>({LABEL_RE})</strong>(?: \([^)]*\))?", lambda m: f"<strong>{esc(T('label_' + LABEL_WORDS[m.group(1)]))}</strong>", body)
+    # only block labels ("**Settled**:"); a label word in running text (old Methodology bullets) is left as written
+    body = re.sub(rf"<strong>({LABEL_RE})</strong>(?: \([^)]*\))?(?=:)", lambda m: f"<strong>{esc(T('label_' + LABEL_WORDS[m.group(1)]))}</strong>", body)
+
+    # section 2: a paragraph between a Dimension heading and its first label is its lead paragraph,
+    # styled as a lede, with the Dimension's figures after it
+    sec2 = re.search(r"<h2>2\..*?(?=<h2>|\Z)", body, re.S)
+    sec2 = sec2.span() if sec2 else (0, 0)
 
     def h3(m):
         name = html.unescape(m.group(1))
         anchor = "dim-" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-        return f'<h3 id="{anchor}">{m.group(1)}</h3>' + "".join(figures_by_dim.pop(name, []))
-    body = re.sub(r"<h3>(.+?)</h3>", h3, body)
+        lead = m.group(2) or ""
+        if sec2[0] <= m.start() < sec2[1]:
+            lead = lead.replace("<p>", '<p class="lede">', 1)
+        return f'<h3 id="{anchor}">{m.group(1)}</h3>' + lead + "".join(figures_by_dim.pop(name, []))
+    body = re.sub(rf"<h3>(.+?)</h3>(\s*<p>(?!<strong>(?:{LABEL_RE})</strong>).*?</p>)?", h3, body, flags=re.S)
     body = re.sub(rf"<h2>((?:\d+\. )?{re.escape(T('method_word'))}\b)", r'<h2 id="methodology">\1', body, count=1)
     return body
 

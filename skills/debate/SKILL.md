@@ -152,9 +152,9 @@ If the user later supplies Evidence for one of those, add it and rerun from Stag
 
 If the user asks for the Report in another language, dispatch one fresh `general-purpose` agent to translate `outputs/report.md` into `outputs/report-<lang>.md` (for example `report-sl.md`), and `agent/figures.json` into `agent/figures-<lang>.json`. Also write `agent/motion-<lang>.md` yourself: the Motion line in bold, and the Source Tier lines (`- A: …`) translated. The translation must mirror the original:
 
-- the same sections, subsections, bullets and Evidence links, in the same order;
+- the same sections, subsections, bullets and Evidence links, in the same order, including each Dimension's untitled lead paragraph;
 - the domain's own terms, taken from the Evidence quotes (the act's and institutions' names as the sources write them), not literal translations;
 - the Side names of that language's interface (Slovenian: Za / Proti); Claim and Evidence IDs stay as they are, because they are file links;
-- the `· Status:` markers and crux labels in the original language, or in the target language where `report_html.py` lists them.
+- the `· Status:` markers and block labels (Settled, Open questions, Depends on your values) in the original language, or in the target language where `report_html.py` lists them.
 
 Then run `uv run --script <skill dir>/scripts/report_html.py <folder> --lang <lang>`, which writes `outputs/report-<lang>.html`. Add the translated files to `README.md` (the Report rows, the `agent/` table and the rebuild commands). From then on, make every later fix to the Report in both versions, and rebuild both.

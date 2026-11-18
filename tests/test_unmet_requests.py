@@ -1,6 +1,6 @@
 """The Evidence Requests table in state.md, read into the unmet requests the HTML Report lists.
 
-Run: uv run --with markdown==3.7 python3 -m unittest discover tests
+Run: uv run --with markdown==3.7 --with pytest==9.2.0 pytest tests
 """
 import sys
 import unittest

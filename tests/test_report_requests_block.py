@@ -1,6 +1,6 @@
 """Building the HTML Report: the block of Evidence Requests the debate could not get.
 
-Run: uv run --with markdown==3.7 python3 -m unittest discover tests
+Run: uv run --with markdown==3.7 --with pytest==9.2.0 pytest tests
 """
 import subprocess
 import sys
