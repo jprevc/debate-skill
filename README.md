@@ -15,10 +15,11 @@ The main agent frames the Motion with you, then runs fresh subagents Stage by St
 | 4 Rejoinder | Advocates | answer the Rebuttal, fix Evidence the Audit flagged |
 | 4a Rejoinder Audit | Auditors | audit the new Evidence |
 | 5 Judgment | Judge | `report.md`, `figures.json`, `report.html` |
+| 6 Confrontation | Editor, then a Checker | `confrontation.md`: each Dimension retold turn by turn, Pro and Con, from the record only; a Confrontation tab in `report.html` (skip with `no-confrontation`) |
 
 The main agent stops after each Stage and asks before starting the next. When an Advocate needs a document only you can get, it raises an Evidence Request.
 
-**Output:** `outputs/report.md` and a self-contained `outputs/report.html` with charts, info pop-ups and every Evidence ID clickable to its quote, translation and Audit verdict. On request, a translated Report (`report-<lang>.md/.html`).
+**Output:** `outputs/report.md` and a self-contained `outputs/report.html` with charts, info pop-ups and every Evidence ID clickable to its quote, translation and Audit verdict. The Confrontation (`outputs/confrontation.md`, and a tab in the HTML Report) retells each Dimension as turns between the Sides; it is an edited rendering of the written cases, not a real conversation. On request, a translated Report (`report-<lang>.md/.html`, `confrontation-<lang>.md`).
 
 ## Requirements
 
@@ -56,7 +57,7 @@ The folder is laid out as:
 README.md  what the debate is and where everything is; CLAUDE.md points a new Claude session to it
 sources/   your own files, never changed by the agents
 agent/     the debate record: state, cases, audits, Evidence and cached sources
-outputs/   report.md, report.html (and report-<lang>.* for a translation)
+outputs/   report.md, report.html, confrontation.md (and report-<lang>.*, confrontation-<lang>.md for a translation)
 ```
 
 If the folder already holds other things, the skill creates `<motion-slug>/` in it instead.

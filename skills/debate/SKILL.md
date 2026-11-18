@@ -19,7 +19,7 @@ One debate per project folder, which keeps what the user supplied apart from wha
   CLAUDE.md   loads README.md and the working rules into any Claude session opened here
   sources/    the user's own files, exactly as they gave them; agents never write here
   agent/      the debate record, everything the agents made
-  outputs/    report.md  report.html  (report-<lang>.md  report-<lang>.html for a Translated Report)
+  outputs/    report.md  report.html  confrontation.md  (report-<lang>.*  confrontation-<lang>.md for a Translated Report)
 ```
 
 - `<project>` is the folder the user names, or the directory they invoked the skill from when it is empty or holds only their documents for this Motion. Otherwise create `<project>` there as `<motion-slug>/`, and tell the user. It is never `<skill dir>`. Folder names carry no date: the date is in `state.md`.
@@ -34,17 +34,19 @@ agent/
   notes-<prefix>.md                     one per Advocate (prefix: pro, con, pro-a, …)
   1-opening-<prefix>.md  2-rebuttal-<prefix>.md  4-rejoinder-<prefix>.md
   3-audit-batch-<N>.md  3-audit.md
+  confrontation-check.md                the Checker's findings on the Confrontation
   figures-<lang>.json  motion-<lang>.md   only for a Translated Report
 ```
 
 ## Start or resume
 
-The user may give a Motion, a link or a question. They may add `quick`, which skips the Rejoinder, and a folder.
+The user may give a Motion, a link or a question. They may add `quick`, which skips the Rejoinder, `no-confrontation`, which skips Stage 6, and a folder.
 
 - If the given folder or the current directory contains `agent/state.md`, or is `agent/` itself, **resume**. An older debate folder has `state.md` at its top, with no `agent/`: resume it in place, and the scripts write its Report there too. Read `state.md` and find the first Stage that isn't `done` or `skipped`. Tell the user which Stage you are resuming.
   - `outputs-done`: every dispatch finished, so run only Between Stages for it.
   - `running`: rerun only the dispatches whose output is incomplete. An Advocate's case file is complete when it has its final `## Evidence Requests` section, and an Audit batch is complete when its batch file exists. Keep the complete outputs.
   - `pending`: run the Stage.
+  - A `state.md` from before Stage 6 existed has no Confrontation row. Add the row as `pending` and the line `- Confrontation: on`, and log it, so resuming a finished debate gives it a Confrontation.
 - Otherwise run Framing.
 
 ## Stage 0: Framing
@@ -62,7 +64,7 @@ The user may give a Motion, a link or a question. They may add `quick`, which sk
 5. **Dimensions.** Propose them: the document's provisions, or cross-cutting themes such as cost, legality or health effects. Let the user confirm or edit the list.
 6. **Write the folder.**
    - `motion.md`, from `templates/motion.md`. Include Source Tier examples for this domain. Put each kind of document in exactly one tier, and cover every kind the debate is likely to quote: the government and its ministries, the proposers' own bill and memorandum, courts including dissenting opinions. The Report language is English unless the user asks for another. It is the language of every case file and the Report; quotes stay in their source's language.
-   - `state.md`, from `templates/state.md`. In quick mode, mark Rejoinder and Rejoinder Audit `skipped`.
+   - `state.md`, from `templates/state.md`. In quick mode, mark Rejoinder and Rejoinder Audit `skipped`. With `no-confrontation`, set `- Confrontation: off` and mark Stage 6 `skipped`.
    - `agent/evidence/`, and the empty `outputs/`
    - `README.md` from `templates/project-readme.md` and `CLAUDE.md` from `templates/project-claude.md`, in `<project>`. Fill in every placeholder, with `<skill dir>` as its absolute path, and drop the parts that don't apply (groups, translation, quick mode). Status is "in progress", and the Report rows say "not written yet (Stage 5)". If either file already exists and isn't one of these, leave it and add the template's text under its own heading at the end.
 7. **Groups.** With more than about six Dimensions, split them into groups (A, B, …) of related Dimensions. Each group gets its own Advocate per Side. Record the groups in `state.md`.
@@ -71,7 +73,7 @@ The user may give a Motion, a link or a question. They may add `quick`, which sk
 ## Dispatching
 
 - Every subagent is **fresh**: a new `general-purpose` Agent for every Stage, never a continued one.
-- Pass `model: "sonnet"` for Advocates and Auditors. Their work is high-volume research and checking, and on a large Motion they run 8 or more at a time. Leave the Judge on the default model, because it does the synthesis the Report depends on. If the user asks for a different model, use theirs.
+- Pass `model: "sonnet"` for Advocates and Auditors. Their work is high-volume research and checking, and on a large Motion they run 8 or more at a time. Leave the Judge and the Editor on the default model, because they do the synthesis the Report and the Confrontation depend on. The Checker runs on `"sonnet"`. If the user asks for a different model, use theirs.
 - Run the Advocates of one Stage in parallel, in a single message, one per Side per group. Run Audit batches in parallel too.
 - Each dispatch prompt is short. It names the brief to follow and the parameters, and nothing about the user beyond `motion.md`:
 
@@ -90,7 +92,7 @@ Wait for every subagent of a Stage to finish before running Between Stages.
 
 If the harness stops a subagent from writing its output file, ask it to return the full text in its reply, then save that text to the file yourself, unchanged.
 
-## Stages 1–5
+## Stages 1–6
 
 Mark each Stage `running` in `state.md` when you dispatch it, `outputs-done` when every dispatch has finished, and `done` when Between Stages is complete.
 
@@ -102,6 +104,7 @@ Mark each Stage `running` in `state.md` when you dispatch it, `outputs-done` whe
 | **4 Rejoinder** | `advocate.md`, `Stage: rejoinder`, `Output file: 4-rejoinder-<prefix>.md` | the opposing group's `2-rebuttal-*` |
 | **4a Rejoinder Audit** | `auditor.md`, for Evidence created since the Audit, including new `E-USER-*` | n/a |
 | **5 Judgment** | `judge.md`, with Folder and Skill dir only | n/a |
+| **6 Confrontation** | `editor.md` and `checker.md`, in the loop below | n/a |
 
 **Audit batches:**
 - The Evidence Audit covers every Evidence file, including `E-PRIMARY-*` and `E-USER-*`. The Rejoinder Audit covers every Evidence file that no `3-audit-batch-*.md` lists. Go by the batch files, never by what an `## Audit` section contains: Advocates sometimes write in it.
@@ -109,7 +112,15 @@ Mark each Stage `running` in `state.md` when you dispatch it, `outputs-done` whe
 - After the batches return, write `3-audit.md`. It holds a table of counts per Side (passed, partial, failed, by tier), then every batch's "Findings worth the Judge's attention", copied verbatim, then links to the batch files. A Rejoinder Audit appends its own section to `3-audit.md`.
 - Before writing `3-audit.md`, run the ledger and settle every `TIERMIX`: pick one tier for the source from the domain list in `motion.md`, set it in each listed Evidence file's `Source Tier` line, keep each Auditor's reasoning in Notes, and log the decision in `state.md`. Settle every `BADAUDIT` too: send the listed Evidence back to its batch's Auditor to correct the fields. Then tally the `Result` lines.
 
-**Quick mode:** skip Stages 4 and 4a, and the Judge works from Stages 1–3.
+**Quick mode:** skip Stages 4 and 4a, and the Judge works from Stages 1–3. The Confrontation still runs, with no rejoinder turns.
+
+**Stage 6 Confrontation.** The Editor retells each Dimension as turns between the Sides, built only from the record (`templates/confrontation.md`), and a Checker compares each turn with the Claims it names:
+
+1. Dispatch a fresh Editor with `Mode: write`. It runs `ledger.py` until no `CONFRONTATION` line is left, and rebuilds `report.html`.
+2. Dispatch a fresh Checker with `Round: 1`. It appends its findings to `confrontation-check.md`.
+3. If it found issues, dispatch a fresh Editor with `Mode: fix`, then a fresh Checker with `Round: 2`. Stop there: log any issue still open in `state.md`, and tell the user at Finish.
+
+Run Stage 6 straight after Judgment's Between Stages, with no checkpoint before it: it adds nothing to the record. Its Between Stages is only steps 1 and 4.
 
 ## Between Stages
 
@@ -134,24 +145,26 @@ After every Stage, in this order:
    - If the user can't get something, mark it `unavailable`.
    - The debate goes on either way: pending Claims stay pending, and the Report shows them as unsupported.
 4. **State.** Mark the Stage `done`, and log anything you reran or skipped.
-5. **Checkpoint.** Give the user a short progress note and name the next Stage with its number of dispatches. Then wait: dispatch the next Stage only when the user says to continue.
+5. **Checkpoint.** Give the user a short progress note and name the next Stage with its number of dispatches. Then wait: dispatch the next Stage only when the user says to continue. After Judgment, skip the checkpoint and go straight on to Stage 6.
 
 ## Finish
 
-When Judgment is done, update `README.md`: the status line ("finished", the date, how many Evidence Requests are still open), the Report rows, and the Dimension count and groups if they changed. Then give the user:
-- the paths to `outputs/report.html` (the Report with charts; it opens offline in a browser) and `outputs/report.md`
+When Stage 6 is done or skipped, update `README.md`: the status line ("finished", the date, how many Evidence Requests are still open), the Report rows, and the Dimension count and groups if they changed. Then give the user:
+- the paths to `outputs/report.html` (the Report with charts and the Confrontation tab; it opens offline in a browser), `outputs/report.md` and `outputs/confrontation.md`
+- any Confrontation issue the Checker still reported after round 2; with `no-confrontation`, one line saying the Confrontation was skipped and that resuming the debate adds it
 - the Judge's three-line summary of the main cruxes
 - any Evidence Requests still `open`
 
-If the user later supplies Evidence for one of those, add it and rerun from Stage 4a. That means a short audit, then a new Judgment.
+If the user later supplies Evidence for one of those, add it and rerun from Stage 4a. That means a short audit, then a new Judgment and a new Confrontation.
 
 ## Translated Report
 
-If the user asks for the Report in another language, dispatch one fresh `general-purpose` agent to translate `outputs/report.md` into `outputs/report-<lang>.md` (for example `report-sl.md`), and `agent/figures.json` into `agent/figures-<lang>.json`. Also write `agent/motion-<lang>.md` yourself: the Motion line in bold, and the Source Tier lines (`- A: …`) translated. The translation must mirror the original:
+If the user asks for the Report in another language, dispatch one fresh `general-purpose` agent to translate `outputs/report.md` into `outputs/report-<lang>.md` (for example `report-sl.md`), `agent/figures.json` into `agent/figures-<lang>.json`, and `outputs/confrontation.md`, when it exists, into `outputs/confrontation-<lang>.md`. Also write `agent/motion-<lang>.md` yourself: the Motion line in bold, and the Source Tier lines (`- A: …`) translated. The translation must mirror the original:
 
 - the same sections, subsections, bullets and Evidence links, in the same order, including each Dimension's untitled lead paragraph;
 - the domain's own terms, taken from the Evidence quotes (the act's and institutions' names as the sources write them), not literal translations;
 - the Side names of that language's interface (Slovenian: Za / Proti); Claim and Evidence IDs stay as they are, because they are file links;
-- the `· Status:` markers and crux labels in the original language, or in the target language where `report_html.py` lists them.
+- the `· Status:` markers and crux labels in the original language, or in the target language where `report_html.py` lists them;
+- in the Confrontation, every turn with the same ID line and Evidence links, the Dimension headings as the translated Report names them, and the turn headers in the target language where `templates/confrontation.md` lists them (Slovenian: `**Za · Uvodni nastop**`), otherwise in English.
 
-Then run `uv run --script <skill dir>/scripts/report_html.py <folder> --lang <lang>`, which writes `outputs/report-<lang>.html`. Add the translated files to `README.md` (the Report rows, the `agent/` table and the rebuild commands). From then on, make every later fix to the Report in both versions, and rebuild both.
+Then run `python3 <skill dir>/scripts/ledger.py <folder>`, and have the translator fix any `CONFRONTATION` line about `confrontation-<lang>.md`; then run `uv run --script <skill dir>/scripts/report_html.py <folder> --lang <lang>`, which writes `outputs/report-<lang>.html`. If the Confrontation is written after a Report was already translated, translate it the same way then. Add the translated files to `README.md` (the Report rows, the `agent/` table and the rebuild commands). From then on, make every later fix to the Report or the Confrontation in both versions, and rebuild both.

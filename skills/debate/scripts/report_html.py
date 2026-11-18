@@ -15,12 +15,14 @@ Reads outputs/report.md, then agent/figures.json (optional), agent/motion.md, th
 files and agent/evidence/E-*.md, and writes one self-contained outputs/report.html: the Report text with every Evidence ID opening
 its quote, translation and Audit verdict; charts of the record (Evidence quality and Audit
 results per Side, crux status per Dimension), each with an info pop-up that explains it;
-and the Judge's figures from figures.json.
+and the Judge's figures from figures.json; and, when outputs/confrontation.md exists, the
+Confrontation tab (each Dimension's turns as chat bubbles; the check is in ledger.py).
 
 The interface language follows "Report language" in motion.md (English and Slovenian
 have interface strings; others fall back to English). --lang <code> builds a translated
 Report instead: it reads report-<code>.md, figures-<code>.json and motion-<code>.md
-(each falling back to the untranslated file) and writes report-<code>.html.
+(each falling back to the untranslated file) and confrontation-<code>.md (no fallback), and
+writes report-<code>.html.
 
 Prints problems one per line, like ledger.py:
   FIGURE   a figure in figures.json is malformed or cites Evidence that is missing,
@@ -43,7 +45,7 @@ from pathlib import Path
 import markdown
 
 sys.path.insert(0, str(Path(__file__).parent))
-from ledger import CID, CLAIM_RE, EID, FILE_RE, audit_field, frontmatter  # noqa: E402
+from ledger import CID, CLAIM_RE, EID, FILE_RE, audit_field, frontmatter, parse_confrontation  # noqa: E402
 
 SIDES = ("PRO", "CON")
 TIERS = ("A", "B", "C", "D")
@@ -63,6 +65,8 @@ STRINGS = {
         "motion_label": "Motion debated (the proposition the two Sides argued, not a recommendation):",
         "notice": "This report maps the evidence and the cruxes. It does not recommend a decision: once the facts are laid out, the choice depends on your values.",
         "nav_record": "The record at a glance", "nav_figures": "Key figures", "nav_report": "Full report", "nav_method": "Methodology",
+        "nav_confrontation": "Confrontation", "not_shown": "Not shown",
+        "confrontation_note": "An edited rendering of the written cases, not a real conversation. Each turn paraphrases the Claims and responses whose IDs follow it, and adds nothing to them. Pro speaks first at every Stage only by convention; the last word is not the winning one, and the Confrontation carries no verdict.",
         "method_word": "Methodology",
         "record_lede": "How well each Side's Evidence held up. Bar length is the share of that Side's Evidence; the number at the end is the count. These charts describe the sources, not who is right.",
         "tier_title": "Evidence by Source Tier", "tier_sub": "A primary · B independent expert · C interested party · D opinion",
@@ -114,6 +118,8 @@ STRINGS = {
         "motion_label": "Teza razprave (trditev, o kateri sta strani razpravljali, ne priporočilo):",
         "notice": "To poročilo prikazuje dokaze in ključna vprašanja. Ne priporoča odločitve: ko so dejstva predstavljena, je izbira odvisna od vaših vrednot.",
         "nav_record": "Pregled gradiva", "nav_figures": "Ključni podatki", "nav_report": "Celotno poročilo", "nav_method": "Metodologija",
+        "nav_confrontation": "Soočenje", "not_shown": "Ni prikazano",
+        "confrontation_note": "Urejen prikaz pisnih stališč, ne resničen pogovor. Vsak nastop povzema trditve in odgovore, katerih oznake mu sledijo, in jim ničesar ne dodaja. Stran Za na vsaki stopnji govori prva le po dogovoru; zadnja beseda ni zmagovalna, soočenje pa ne daje razsodbe.",
         "method_word": "Metodologija",
         "record_lede": "Kako so se obnesli dokazi posamezne strani. Dolžina stolpca je delež dokazov te strani, število na koncu pa njihovo število. Grafi opisujejo vire, ne tega, kdo ima prav.",
         "tier_title": "Dokazi po ravni vira", "tier_sub": "A primarni vir · B neodvisna strokovna institucija · C zainteresirana stran · D mnenje",
@@ -230,6 +236,7 @@ def load_evidence(folder):
             "translation": section(text, "Translation"),
             "tier": tier if tier in TIERS else "",
             "audit": audit_result(text),
+            "result": audit_field(text, "Result"),
             "found": audit_field(text, "Quote found"),
             "supports": audit_field(text, "Supports"),
             "cherry": audit_field(text, "Cherry-picked"),
@@ -719,6 +726,14 @@ th{color:var(--ink2);font-weight:600}td.num{font-variant-numeric:tabular-nums}
 article table{display:block;overflow-x:auto}
 article blockquote{margin:12px 0;padding:4px 14px;border-left:3px solid var(--axis);color:var(--ink2)}
 a.ev{white-space:nowrap;font-size:.9em}
+.conv{display:flex;flex-direction:column;gap:14px;margin:12px 0 8px}
+.turn{display:flex;flex-direction:column;gap:3px;max-width:80%;align-self:flex-start}.turn.con{align-self:flex-end;align-items:flex-end}
+@media (max-width:560px){.turn{max-width:94%}}
+.turn .who{font-size:12px;font-weight:600;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em}
+.turn .bubble{background:var(--surface);border:1px solid var(--ring);border-left:3px solid var(--pro);border-radius:4px 12px 12px 12px;padding:8px 14px}
+.turn.con .bubble{border-left:1px solid var(--ring);border-right:3px solid var(--con);border-radius:12px 4px 12px 12px}
+.turn .bubble p{margin:4px 0}.turn .ids{font-size:12px;color:var(--muted)}
+.turn .flag{margin-left:4px;cursor:help}
 .status{font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid var(--axis);white-space:nowrap}
 #tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--page);font-size:13px;padding:6px 9px;border-radius:6px;max-width:320px;display:none;z-index:9}
 dialog{max-width:680px;width:calc(100% - 32px);border:1px solid var(--ring);border-radius:12px;background:var(--surface);color:var(--ink);padding:20px}
@@ -822,6 +837,27 @@ def render_body(report_md, figures_by_dim):
     return body
 
 
+def confrontation_html(text, ev):
+    """The Confrontation tab: per Dimension, the turns as chat bubbles, Pro on the left and Con on the right.
+    Evidence that did not pass the Audit carries a badge whose tooltip is the Auditor's Result."""
+    out = [f'<section id="confrontation"><h2>{esc(T("nav_confrontation"))}</h2><div class="notice">{esc(T("confrontation_note"))}</div>']
+    for sec in parse_confrontation(text):
+        anchor = "conf-" + re.sub(r"[^a-z0-9]+", "-", sec["dim"].lower()).strip("-")
+        out.append(f'<h3 id="{anchor}">{esc(sec["dim"])}</h3><div class="conv">')
+        for t in sec["turns"]:
+            body = markdown.markdown(link_ids(t["text"]))
+            body = re.sub(rf'<a href="(?:[\w.%-]+/)*evidence/({EID})\.md">(.*?)</a>', lambda m: (
+                f'<a class="ev" href="{EVDIR}/{m.group(1)}.md" data-ev="{m.group(1)}">{m.group(2)}</a>'
+                + (f'<span class="flag" data-tip="{esc(ev[m.group(1)]["result"] or T(ev[m.group(1)]["audit"]))}" tabindex="0">{esc(T(ev[m.group(1)]["audit"]))}</span>'
+                   if m.group(1) in ev and ev[m.group(1)]["audit"] != "passed" else "")), body)
+            ids = ", ".join(t["shown"]) + (f' · {esc(T("not_shown"))}: {", ".join(t["hidden"])}' if t["hidden"] else "")
+            out.append(f'<div class="turn {t["side"].lower()}"><div class="who">{esc(t["label"])}</div>'
+                       f'<div class="bubble">{body}</div><div class="ids">{ids}</div></div>')
+        out.append("</div>")
+    out.append("</section>")
+    return "".join(out)
+
+
 def layout(p):
     """(agent dir, outputs dir) for a project folder, its agent/ folder, or an older flat debate folder."""
     p = p.resolve()
@@ -885,9 +921,12 @@ def main():
             general += by_dim.pop(d)
 
     body = render_body(report, by_dim)
+    # the Confrontation in this Report's language; a translated Report shows none until it is translated
+    cp = outdir / f"confrontation{sfx}.md"
+    confrontation = confrontation_html(cp.read_text(encoding="utf-8"), ev) if cp.exists() else ""
     title = re.match(r"^# (.+)$", report, re.M)
     title = title.group(1) if title else "Debate Report"
-    cited = set(re.findall(EID, body)) | {i for f in figs for i in fig_ids(f)}
+    cited = set(re.findall(EID, body + confrontation)) | {i for f in figs for i in fig_ids(f)}
     evdata = {i: {k: v for k, v in ev[i].items() if k not in ("id", "side")} for i in sorted(cited) if i in ev}
     key = (f'<section id="figures"><h2>{esc(T("nav_figures"))}</h2><p class="lede">{esc(T("figures_lede"))}</p>'
            + "".join(general) + "</section>") if general else ""
@@ -903,6 +942,7 @@ def main():
     tabs = [(k, label, content) for k, label, content in [
         ("report", "nav_report", f'<article id="report"><h2>{esc(T("nav_report"))}</h2>{body}</article>'),
         ("record", "nav_record", record_charts(ev, claims, concessions, cruxes, domain_tiers) + key),
+        ("confrontation", "nav_confrontation", confrontation),
         ("methodology", "nav_method", f'<article class="method">{method}</article>' if method else ""),
     ] if content]
     # each tab's content must keep an element with id=key: the link is the jump-menu target without JavaScript

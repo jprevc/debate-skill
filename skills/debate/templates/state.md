@@ -2,6 +2,7 @@
 
 - Motion: <one line, as in motion.md>
 - Mode: full            # full | quick
+- Confrontation: on     # on | off (no-confrontation)
 - Report language: <e.g. Slovenian>
 - Created: YYYY-MM-DD
 
@@ -21,8 +22,9 @@
 | 4 Rejoinder | pending | 4-rejoinder-pro.md, 4-rejoinder-con.md |
 | 4a Rejoinder Audit | pending | 3-audit.md (appended) |
 | 5 Judgment | pending | report.md |
+| 6 Confrontation | pending | confrontation.md, confrontation-check.md |
 
-<!-- Status: pending | running | outputs-done (Between Stages still to run) | done | skipped (quick mode) -->
+<!-- Status: pending | running | outputs-done (Between Stages still to run) | done | skipped (quick mode, or Confrontation: off) -->
 
 ## Evidence Requests
 
