@@ -1,0 +1,9 @@
+{
+  "name": "debate",
+  "version": "0.1.0",
+  "description": "Debate a yes/no Motion between Pro and Con Advocate subagents, with audited, traceable Evidence and a verdict-free Report (Markdown and offline HTML with charts).",
+  "author": { "name": "jprevc" },
+  "repository": "https://github.com/jprevc/debate-skill",
+  "keywords": ["debate", "referendum", "evidence", "fact-checking", "skills"],
+  "skills": ["./skills/debate"]
+}

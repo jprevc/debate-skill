@@ -1,6 +1,6 @@
 # Evidence, Claims and Evidence Requests
 
-The rules every participant in a debate shares. The participants are the main agent, the Advocates, the Auditors and the Judge. Terms follow the skill's glossary.
+The rules every participant in a debate shares. The participants are the main agent, the Advocates, the Auditors and the Judge. Capitalised terms (Motion, Side, Claim, Evidence, Dimension …) mean what SKILL.md and this file define.
 
 ## Evidence
 

@@ -1,0 +1,6 @@
+{
+  "name": "debate-skill",
+  "owner": { "name": "jprevc" },
+  "metadata": { "description": "The /debate skill for Claude Code" },
+  "plugins": [{ "name": "debate", "source": "./" }]
+}
