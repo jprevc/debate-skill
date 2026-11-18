@@ -53,6 +53,7 @@ From a folder for this debate (empty, or holding your source documents):
 The folder is laid out as:
 
 ```
+README.md  what the debate is and where everything is; CLAUDE.md points a new Claude session to it
 sources/   your own files, never changed by the agents
 agent/     the debate record: state, cases, audits, Evidence and cached sources
 outputs/   report.md, report.html (and report-<lang>.* for a translation)
@@ -68,7 +69,8 @@ skills/debate/         the skill itself (everything that gets installed)
   SKILL.md             orchestrator instructions
   prompts/             Advocate, Auditor and Judge briefs
   reference/           shared Evidence rules, site recipes
-  templates/           case, Evidence, audit, motion, state, report, methodology
+  templates/           case, Evidence, audit, motion, state, report, methodology,
+                       project README.md and CLAUDE.md
   scripts/             evidence.py (fetch, quote, verify, pxweb), ledger.py (checks),
                        report_html.py (HTML report), render.py (headless Chromium)
 GLOSSARY.md, docs/     domain glossary, ADRs and agent docs for developing the skill

@@ -15,6 +15,8 @@ One debate per project folder, which keeps what the user supplied apart from wha
 
 ```
 <project>/
+  README.md   what the debate is and where to find everything, for a person or a fresh session
+  CLAUDE.md   loads README.md and the working rules into any Claude session opened here
   sources/    the user's own files, exactly as they gave them; agents never write here
   agent/      the debate record, everything the agents made
   outputs/    report.md  report.html  (report-<lang>.md  report-<lang>.html for a Translated Report)
@@ -62,6 +64,7 @@ The user may give a Motion, a link or a question. They may add `quick`, which sk
    - `motion.md`, from `templates/motion.md`. Include Source Tier examples for this domain. Put each kind of document in exactly one tier, and cover every kind the debate is likely to quote: the government and its ministries, the proposers' own bill and memorandum, courts including dissenting opinions. The Report language is English unless the user asks for another. It is the language of every case file and the Report; quotes stay in their source's language.
    - `state.md`, from `templates/state.md`. In quick mode, mark Rejoinder and Rejoinder Audit `skipped`.
    - `agent/evidence/`, and the empty `outputs/`
+   - `README.md` from `templates/project-readme.md` and `CLAUDE.md` from `templates/project-claude.md`, in `<project>`. Fill in every placeholder, with `<skill dir>` as its absolute path, and drop the parts that don't apply (groups, translation, quick mode). Status is "in progress", and the Report rows say "not written yet (Stage 5)". If either file already exists and isn't one of these, leave it and add the template's text under its own heading at the end.
 7. **Groups.** With more than about six Dimensions, split them into groups (A, B, …) of related Dimensions. Each group gets its own Advocate per Side. Record the groups in `state.md`.
 8. Mark Framing `done`, then tell the user the debate is starting and roughly how many subagent runs it will take.
 
@@ -135,7 +138,7 @@ After every Stage, in this order:
 
 ## Finish
 
-When Judgment is done, give the user:
+When Judgment is done, update `README.md`: the status line ("finished", the date, how many Evidence Requests are still open), the Report rows, and the Dimension count and groups if they changed. Then give the user:
 - the paths to `outputs/report.html` (the Report with charts; it opens offline in a browser) and `outputs/report.md`
 - the Judge's three-line summary of the main cruxes
 - any Evidence Requests still `open`
@@ -151,4 +154,4 @@ If the user asks for the Report in another language, dispatch one fresh `general
 - the Side names of that language's interface (Slovenian: Za / Proti); Claim and Evidence IDs stay as they are, because they are file links;
 - the `· Status:` markers and crux labels in the original language, or in the target language where `report_html.py` lists them.
 
-Then run `uv run --script <skill dir>/scripts/report_html.py <folder> --lang <lang>`, which writes `outputs/report-<lang>.html`. From then on, make every later fix to the Report in both versions, and rebuild both.
+Then run `uv run --script <skill dir>/scripts/report_html.py <folder> --lang <lang>`, which writes `outputs/report-<lang>.html`. Add the translated files to `README.md` (the Report rows, the `agent/` table and the rebuild commands). From then on, make every later fix to the Report in both versions, and rebuild both.
