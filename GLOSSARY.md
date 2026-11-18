@@ -5,7 +5,7 @@ A structured, evidence-based debate over any binary Motion (political, technical
 ## Debate
 
 **Motion**:
-The binary proposition under debate, e.g. "Bill X should pass." Open questions are reframed into a Motion before the debate starts.
+The binary proposition under debate, e.g. "Bill X should pass." Whatever the user wants decided is reframed into a Motion before the debate starts.
 _Avoid_: Topic, question, issue
 
 **Side**:
@@ -75,11 +75,13 @@ An Advocate's acceptance of an opposing Claim combined with an argument that it 
 The final verdict-free document that maps the cruxes and equips the user to argue either Side.
 _Avoid_: Verdict, summary
 
-**Factual Crux**:
-A disagreement that Evidence can settle (or shows is unsettled).
+**Open Question**:
+A disagreement that Evidence can settle (or shows is unsettled). In the Report it appears under "Open questions", each with its status.
+_Avoid_: Factual Crux
 
-**Value Crux**:
-A disagreement that turns on what one prioritizes, not on facts.
+**Value Question**:
+A disagreement that turns on what one prioritizes, not on facts. In the Report it appears under "Depends on your values".
+_Avoid_: Value Crux
 
 **Cheat Sheet**:
 The per-Side part of the Report listing the arguments opponents are likely to raise and the best Evidence-backed counters.

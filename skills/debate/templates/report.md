@@ -16,11 +16,11 @@
 
 - <one bullet per fact both Sides accept (Concessions), or Claim backed by A/B-tier Evidence that passed the Audit and was never successfully rebutted. Each one links its Evidence.>
 
-**Factual Cruxes**:
+**Open questions**:
 
 - **<the question>** · Status: <settled | leaning Pro | leaning Con | unsettled> — <what the strongest Evidence shows, and why it has that status>
 
-**Value Cruxes**:
+**Depends on your values**:
 
 - <one bullet per disagreement that turns on priorities: "If you weigh X over Y, the Evidence favors <Side>, because …">
 
@@ -52,7 +52,7 @@
 
 ## 6. Unresolved
 
-<Evidence Requests that are still open or unavailable, and what each one would settle. Factual Cruxes the Evidence leaves open.>
+<Evidence Requests that are still open or unavailable, and what each one would settle. Open Questions the Evidence leaves unsettled.>
 
 ## 7. Evidence
 

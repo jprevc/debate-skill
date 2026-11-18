@@ -24,9 +24,9 @@ The record in the folder is your whole world. The Advocates' notes files are the
 - Evidence that failed the Audit carries no weight. Say so where a Claim depended on it.
 - Tier C supports a Claim only together with its funder or affiliation, and you state the funder when you use it. Tier D shows only what someone said.
 - Name the source, not its tier. Write "the Ministry of Finance, which supports the act" or "the Fiscal Council", never "(tier C)" or "on tier A sources". Each Evidence link already shows its tier, and tier letters in the text confuse readers.
-- A **Factual Crux** is a disagreement the Evidence could settle. Classify it as settled, leaning one way, or unsettled, and state which Evidence decides it.
-- A **Value Crux** is a disagreement that remains after the facts are agreed. Phrase it as "If you weigh X over Y, the Evidence favors <Side>, because …".
-- Mitigations and Concessions often turn a Factual Crux into a Value Crux. Follow that shift.
+- An **Open Question** is a disagreement the Evidence could settle. Classify it as settled, leaning one way, or unsettled, and state which Evidence decides it.
+- A **Value Question** is a disagreement that remains after the facts are agreed. Phrase it as "If you weigh X over Y, the Evidence favors <Side>, because …".
+- Mitigations and Concessions often turn an Open Question into a Value Question. Follow that shift.
 - Pending Evidence Claims are unsupported. List them under Unresolved, with what they would settle.
 
 ## Output
@@ -37,7 +37,7 @@ The record in the folder is your whole world. The Advocates' notes files are the
    - Fill the Strength table with counts from the record.
    - Write the imbalance paragraph plainly.
    - Build the Cheat Sheets from the strongest exchanges in the debate. Each "You answer" cites audited Evidence that did not fail.
-   - Keep the bullet format of Section 2 exactly, including `· Status: …` on every Factual Crux. `report_html.py` reads it. In a Slovenian Report you may write the markers in Slovenian instead: `· Stanje: razrešeno | v prid strani Za | v prid strani Proti | nerazrešeno`, and the labels `**Ugotovljeno**`, `**Dejstvena ključna vprašanja**`, `**Vrednostna ključna vprašanja**`.
+   - Keep the bullet format of Section 2 exactly, including `· Status: …` on every Open Question. `report_html.py` reads it. In a Slovenian Report you may write the markers in Slovenian instead: `· Stanje: razrešeno | v prid strani Za | v prid strani Proti | nerazrešeno`, and the labels `**Ugotovljeno**`, `**Odprta vprašanja**`, `**Odvisno od vaših vrednot**`.
    - End with the Methodology section from `templates/methodology.md`. Fill its placeholders from `motion.md` and `state.md`, and write it in the Report language.
 2. Write `figures.json` (in the Folder): the charts that let a reader see what the Motion changes. Pick the 3–8 numbers the cruxes turn on, such as competing cost estimates, a threshold or rate before and after, or who gains how much. Every value comes from audited Evidence that did not fail. A value you compute from Evidence (a schedule from statutory rates, a sum) cites that Evidence and says how in `note`. Charts show effects and estimates, never a score of which Side is winning.
 
@@ -64,7 +64,7 @@ The record in the folder is your whole world. The Advocates' notes files are the
 
 ## Done means
 
-- Every Dimension has its three parts: Settled, Factual Cruxes, Value Cruxes.
+- Every Dimension has its three parts: Settled, Open questions, Depends on your values.
 - Every factual statement in the Report links to audited Evidence that did not fail. Where it rests on a partial result, the text says what the Auditor limited.
 - The Report nowhere tells the reader which way to decide, including in its title.
 - The Report ends with the Methodology section, and its text has no tier letters.
