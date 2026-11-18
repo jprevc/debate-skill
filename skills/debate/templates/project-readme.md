@@ -6,7 +6,7 @@ A structured debate on one question: <the Motion as a neutral question: "should 
 
 It was produced with the `debate` skill. AI Advocates argued Pro and Con, each claim was backed by verbatim, cached evidence, Auditors re-checked every source, and a Judge wrote a Report that maps the arguments **without recommending a decision**.
 
-Status: <in progress, at Stage N (see `agent/state.md`) | finished (all Stages done, YYYY-MM-DD)>. <N Evidence Requests are still open; see `agent/state.md`.>
+Status: <in progress, at Stage N (see `agent/state.md`) | finished (all Stages done, YYYY-MM-DD)>. <N Evidence Requests are still unmet (open, partly fulfilled or unavailable); see `agent/state.md`.>
 
 ## Start here
 
@@ -15,7 +15,7 @@ Status: <in progress, at Stage N (see `agent/state.md`) | finished (all Stages d
 | read the result | [`outputs/report.html`](outputs/report.html)<, or [`outputs/report-<lang>.html`](outputs/report-<lang>.html) (<language>)>. It opens offline in a browser; click any Evidence ID to see its quote, translation and Audit verdict. |
 | read it as plain text | [`outputs/report.md`](outputs/report.md)<, [`outputs/report-<lang>.md`](outputs/report-<lang>.md)> |
 | see what is debated, and the source tiers | [`agent/motion.md`](agent/motion.md) |
-| see progress, decisions and open requests | [`agent/state.md`](agent/state.md) (the log at the bottom records every change) |
+| see progress, decisions and unmet requests | [`agent/state.md`](agent/state.md) (the log at the bottom records every change) |
 | find a piece of evidence | [`agent/ledger.md`](agent/ledger.md): every Evidence item, who cited it, and its Audit result |
 
 <!-- Before Judgment, the first two rows say "not written yet (Stage 5)". -->

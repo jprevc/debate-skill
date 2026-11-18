@@ -11,10 +11,11 @@ The project folder holds sources/ (the user's files), agent/ (the debate record)
 outputs/ (the Reports); agent/ itself is accepted too. A folder with no agent/ is read as
 an older, flat debate folder and the Report is written into it.
 
-Reads outputs/report.md, then agent/figures.json (optional), agent/motion.md, the case
-files and agent/evidence/E-*.md, and writes one self-contained outputs/report.html: the Report text with every Evidence ID opening
-its quote, translation and Audit verdict; charts of the record (Evidence quality and Audit
+Reads outputs/report.md, then agent/figures.json (optional), agent/motion.md, agent/state.md
+(optional), the case files and agent/evidence/E-*.md, and writes one self-contained
+outputs/report.html: the Report text with every Evidence ID opening its quote, translation and Audit verdict; charts of the record (Evidence quality and Audit
 results per Side, crux status per Dimension), each with an info pop-up that explains it;
+the Evidence Requests the debate could not get (from state.md, as written there);
 and the Judge's figures from figures.json.
 
 The interface language follows "Report language" in motion.md (English and Slovenian
@@ -29,6 +30,8 @@ Prints problems one per line, like ledger.py:
            more) that is neither in the figure's data nor in its Evidence quotes
   STATUS   a Factual Crux in the Report lacks its "· Status: …" marker
   LANG     the Report language has no interface strings; English is used
+  REQUEST  an Evidence Request in state.md has a status other than open, partial,
+           fulfilled or unavailable; it is shown as open
 Exit code 0 always.
 """
 import html
@@ -108,6 +111,13 @@ STRINGS = {
                        ("Value", "A view on what is right or matters more (e.g. fairness); it has no Evidence, because no source can answer it, only your priorities."),
                        ("Concessions", "How many times this Side, in its responses, conceded a Claim of the other Side because it had no counter. Conceded Claims count as settled."),
                        ("Pending Evidence", "The Claim rests on a document the Advocate could not obtain (an open Evidence Request); the Report treats it as unsupported.")],
+        "req_title": "Evidence the debate could not get",
+        "req_sub": "Evidence Requests that are still open, could not be met, or were met only in part: what each was for, what was tried, and what would get it",
+        "req_none": "Every Evidence Request was met.",
+        "req_status": {"open": "open", "unavailable": "unavailable", "partial": "partly fulfilled"},
+        "req_priority": {"critical": "critical", "nice-to-have": "nice-to-have"},
+        "req_fields": {"for": "For Claims", "needed": "Needed", "tried": "Tried", "where": "Where to get it",
+                       "effort": "Effort", "missing": "Still missing"},
     },
     "sl": {
         "lang": "sl", "title_prefix": "Poročilo o razpravi: ", "kicker": "Poročilo o razpravi",
@@ -159,6 +169,13 @@ STRINGS = {
                        ("vrednostna", "Stališče o tem, kaj je prav ali pomembneje (npr. pravičnost); nima dokazov, saj nanje ne more odgovoriti noben vir, temveč le vaše prioritete."),
                        ("priznanja", "Kolikokrat je ta stran v odgovorih priznala trditev nasprotne strani, ker nanjo ni imela protiargumenta. Priznane trditve se štejejo kot razrešene."),
                        ("čaka na dokaze", "Trditev se opira na dokument, ki ga zagovornik ni mogel pridobiti (odprta zahteva za dokaz); v poročilu velja za nepodprto.")],
+        "req_title": "Dokazi, ki jih razprava ni dobila",
+        "req_sub": "Zahteve za dokaze, ki so še odprte, jih ni bilo mogoče izpolniti ali so bile izpolnjene le delno: za kaj so bile, kaj je bilo poskušeno in kako bi dokaz lahko dobili",
+        "req_none": "Vse zahteve za dokaze so bile izpolnjene.",
+        "req_status": {"open": "odprta", "unavailable": "ni na voljo", "partial": "delno izpolnjena"},
+        "req_priority": {"critical": "ključna", "nice-to-have": "dobrodošla"},
+        "req_fields": {"for": "Za trditve", "needed": "Potrebno", "tried": "Poskušeno", "where": "Kje ga dobiti",
+                       "effort": "Zahtevnost", "missing": "Še manjka"},
     },
 }
 LANG_NAMES = {"english": "en", "en": "en", "slovenian": "sl", "slovene": "sl", "slovenščina": "sl", "slovensko": "sl", "sl": "sl"}
@@ -253,6 +270,40 @@ def load_cases(folder):
             elif ln.startswith("**Re ") and "· Concede" in ln:
                 concessions[side] += 1
     return claims, concessions
+
+
+REQ_COLS = {"ID": "ids", "Priority": "priority", "For": "for", "Status": "status", "Needed": "needed",
+            "Tried": "tried", "Where": "where", "Effort": "effort", "Fulfilled by": "fulfilled"}
+REQ_STATUS = ("open", "unavailable", "partial")  # the unmet ones, in the order they are listed
+
+
+def unmet_requests(state_text):
+    """The Evidence Requests in state.md that are not met (open, unavailable, partial)."""
+    m = re.search(r"^## Evidence Requests\s*\n(.*?)(?=^## |\Z)", state_text, re.S | re.M)
+    rows = [ln.strip().strip("|").split("|") for ln in (m.group(1) if m else "").splitlines() if ln.strip().startswith("|")]
+    if not rows:
+        return []
+    keys = [REQ_COLS.get(c.strip()) for c in rows[0]]
+    out = []
+    for cells in rows[1:]:
+        if all(set(c.strip()) <= set("-: ") for c in cells):
+            continue
+        r = {k: "" for k in REQ_COLS.values()}
+        r.update({k: c.strip() for k, c in zip(keys, cells) if k})
+        r["ids"] = [i.strip() for i in re.sub(r"\s*\(merged\)\s*$", "", r["ids"], flags=re.I).split("+")]
+        if re.match(r"fulfilled\s*\(partial", r["status"], re.I):
+            r["status"] = "partial"
+        missing = re.search(r"\bStill missing:\s*(.*)", r["fulfilled"], re.I | re.S)
+        r["missing"] = missing.group(1).strip() if missing else ""
+        if r["status"] == "fulfilled":
+            continue
+        if r["status"] not in REQ_STATUS:
+            problems.append(f"REQUEST {' + '.join(r['ids'])}: status '{r['status']}' is not one of "
+                            f"open, partial, fulfilled, unavailable; shown as open")
+            r["status"] = "open"
+        out.append(r)
+    # sorted() is stable, so the table's own order breaks ties
+    return sorted(out, key=lambda r: (REQ_STATUS.index(r["status"]), not r["priority"].lower().startswith("critical")))
 
 
 def read_motion(folder, lang=None):
@@ -396,7 +447,8 @@ def info_claims():
     return info("claims", T("info_claims_title"), f'<p>{esc(T("info_claims_intro"))}</p><dl>{dl}</dl>')
 
 
-def record_charts(ev, claims, concessions, cruxes, domain_tiers):
+def record_charts(ev, claims, concessions, cruxes, domain_tiers, reqs=None):
+    """The glance tab's charts; reqs is the list of unmet Evidence Requests, or None when there is no state file."""
     tier_col = {"A": "var(--seq-a)", "B": "var(--seq-b)", "C": "var(--seq-c)", "D": "var(--seq-d)", "not audited": "var(--none)"}
     audit_col = {"passed": "var(--good)", "partial": "var(--warning)", "failed": "var(--critical)", "not audited": "var(--none)"}
     side_name = {s: T(s) for s in SIDES}
@@ -445,8 +497,28 @@ def record_charts(ev, claims, concessions, cruxes, domain_tiers):
             out.append(f'<tr><td><a href="#{anchor}">{esc(c["dim"])}</a></td><td class="num">{c["settled"]}</td><td>{chips}</td>'
                        f'<td>{vchips}</td></tr>')
         out.append("</tbody></table>" + legend([(k, st_col[k]) for k in STATUS] + [("value crux", "var(--value)")]) + "</figure>")
+    if reqs is not None:
+        out.append(requests_html(reqs))
     out.append("</section>")
     return "".join(out)
+
+
+def requests_html(reqs):
+    """One card per unmet Evidence Request; the text is shown as the state file has it."""
+    head = (f'<figure class="wide" id="requests"><figcaption><b>{esc(T("req_title"))}</b>'
+            f'<span>{esc(T("req_sub"))}</span></figcaption>')
+    if not reqs:
+        return head + f'<p class="muted">{esc(T("req_none"))}</p></figure>'
+    st_col = {"open": "var(--critical)", "unavailable": "var(--muted)", "partial": "var(--warning)"}
+    cards = []
+    for r in reqs:
+        base = next((k for k in T("req_priority") if r["priority"].lower().startswith(k)), "")
+        prio = (T("req_priority")[base] + r["priority"][len(base):]) if base else r["priority"]
+        fields = "".join(f'<dt>{esc(T("req_fields")[k])}</dt><dd>{esc(r[k])}</dd>' for k in T("req_fields") if r[k])
+        cards.append(f'<div class="req" style="--c:{st_col[r["status"]]}"><div class="rh"><b>{esc(" + ".join(r["ids"]))}</b>'
+                     f'<span class="rs">{esc(T("req_status")[r["status"]])}</span>'
+                     + (f'<span class="rp">{esc(prio)}</span>' if prio else "") + f'</div><dl>{fields}</dl></div>')
+    return head + "".join(cards) + "</figure>"
 
 
 # ---------- Judge's figures ----------
@@ -714,6 +786,11 @@ th{color:var(--ink2);font-weight:600}td.num{font-variant-numeric:tabular-nums}
 .cruxmap td:first-child{width:38%}.chip,.vchip{display:inline-block;width:14px;height:14px;border-radius:50%;margin:2px 4px 0 0;vertical-align:middle}
 .chip{background:var(--c);cursor:pointer}.vchip{border:2px solid var(--value)}
 .muted{color:var(--muted);font-size:13px}
+.req{border-left:3px solid var(--c);padding:10px 0 4px 12px;margin:0 0 12px}.req+.req{border-top:1px solid var(--grid);padding-top:12px}
+.rh{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;overflow-wrap:anywhere}.rs,.rp{font-size:13px;color:var(--ink2)}.rs{font-weight:600}
+.req dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:8px 0 0;font-size:14px}
+.req dt{color:var(--ink2);font-weight:600}.req dd{margin:0;overflow-wrap:anywhere}
+@media (max-width:560px){.req dl{grid-template-columns:1fr;gap:0}.req dd{margin-bottom:6px}}
 .note{font-size:13px;color:var(--ink2);margin:6px 0 0}.src{font-size:13px;color:var(--ink2);margin:6px 0 0}
 .flag{font-size:11px;padding:1px 6px;border-radius:8px;border:1px solid var(--axis);color:var(--ink2)}
 article table{display:block;overflow-x:auto}
@@ -855,6 +932,8 @@ def main():
             e["url"] = urllib.parse.quote(os.path.relpath(folder / e["url"], outdir))
     claims, concessions = load_cases(folder)
     cruxes = crux_map(report)
+    state_p = folder / "state.md"
+    reqs = unmet_requests(state_p.read_text(encoding="utf-8")) if state_p.exists() else None
 
     figs = []
     fp = pick("figures", ".json")
@@ -893,7 +972,7 @@ def main():
     # A tab with no content is not shown; a later tab is one more entry here.
     tabs = [(k, label, content) for k, label, content in [
         ("report", "nav_report", f'<article id="report"><h2>{esc(T("nav_report"))}</h2>{body}</article>'),
-        ("record", "nav_record", record_charts(ev, claims, concessions, cruxes, domain_tiers) + key),
+        ("record", "nav_record", record_charts(ev, claims, concessions, cruxes, domain_tiers, reqs) + key),
         ("methodology", "nav_method", f'<article class="method">{method}</article>' if method else ""),
     ] if content]
     # each tab's content must keep an element with id=key: the link is the jump-menu target without JavaScript

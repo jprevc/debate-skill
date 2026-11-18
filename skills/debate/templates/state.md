@@ -26,10 +26,17 @@
 
 ## Evidence Requests
 
-| ID | Priority | For | Status | Fulfilled by |
-|---|---|---|---|---|
+| ID | Priority | For | Status | Needed | Tried | Where | Effort | Fulfilled by |
+|---|---|---|---|---|---|---|---|---|
 
-<!-- Status: open | fulfilled | unavailable. Fulfilled by: an E-USER-* ID, or a cached file under evidence/files/ (or an original in ../sources/). -->
+<!--
+ID: one row per document. Requests merged into one row are joined with " + ": R-PRO-B-1 + R-CON-B-2.
+Needed, Where, Effort, For: from the latest Stage in which the request appears.
+Tried: "Why I can't get it", then every attempt with what failed, from every Stage. Your own attempts start with "orchestrator:", e.g. "orchestrator: retried with --render, 403".
+Status: open | partial | fulfilled | unavailable. partial = partly fulfilled: some of it was obtained, the rest is still missing.
+Fulfilled by: an E-USER-* ID, or a cached file under evidence/files/ (or an original in ../sources/). For partial, add a sentence starting "Still missing:".
+The HTML Report lists every open, unavailable and partial request with these columns, as written here; keep a "|" out of the cells.
+-->
 
 ## Log
 
