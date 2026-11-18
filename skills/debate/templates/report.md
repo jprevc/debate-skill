@@ -12,6 +12,8 @@
 
 ### <Dimension name>
 
+<One untitled lead paragraph, 1–3 neutral sentences: what the Motion changes under this Dimension compared with the status quo. Cite the provision ([E-PRIMARY-001](../agent/evidence/E-PRIMARY-001.md)) where there is a Primary Text, otherwise Evidence that passed the Audit. No evaluation, and no heading or bold label.>
+
 **Settled**:
 
 - <one bullet per fact both Sides accept (Concessions), or Claim backed by A/B-tier Evidence that passed the Audit and was never successfully rebutted. Each one links its Evidence.>
