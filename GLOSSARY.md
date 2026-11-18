@@ -5,7 +5,7 @@ A structured, evidence-based debate over any binary Motion (political, technical
 ## Debate
 
 **Motion**:
-The binary proposition under debate, e.g. "Bill X should pass." Open questions are reframed into a Motion before the debate starts.
+The binary proposition under debate, e.g. "Bill X should pass." Whatever the user wants decided is reframed into a Motion before the debate starts.
 _Avoid_: Topic, question, issue
 
 **Side**:
@@ -64,6 +64,10 @@ _Avoid_: Bibliography, source list
 An Advocate's request for Evidence it cannot obtain itself and the user must supply.
 _Avoid_: Help request
 
+**Partly Fulfilled**:
+The status of an Evidence Request where some of the requested Evidence was obtained and the rest is still missing. It counts as unmet, alongside open and unavailable.
+_Avoid_: Fulfilled (partial)
+
 **Pending Evidence**:
 The status of a Claim whose supporting Evidence awaits an Evidence Request.
 
@@ -83,11 +87,13 @@ An Advocate's acceptance of an opposing Claim combined with an argument that it 
 The final verdict-free document that maps the cruxes and equips the user to argue either Side.
 _Avoid_: Verdict, summary
 
-**Factual Crux**:
-A disagreement that Evidence can settle (or shows is unsettled).
+**Open Question**:
+A disagreement that Evidence can settle (or shows is unsettled). In the Report it appears under "Open questions", each with its status.
+_Avoid_: Factual Crux
 
-**Value Crux**:
-A disagreement that turns on what one prioritizes, not on facts.
+**Value Question**:
+A disagreement that turns on what one prioritizes, not on facts. In the Report it appears under "Depends on your values".
+_Avoid_: Value Crux
 
 **Confrontation**:
 A rendering of the finished record as Turns between the Sides, one Dimension at a time, and the Stage that writes it. It is an edited rendering of the written cases, not a real conversation, and it carries no verdict.

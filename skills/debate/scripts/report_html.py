@@ -11,11 +11,12 @@ The project folder holds sources/ (the user's files), agent/ (the debate record)
 outputs/ (the Reports); agent/ itself is accepted too. A folder with no agent/ is read as
 an older, flat debate folder and the Report is written into it.
 
-Reads outputs/report.md, then agent/figures.json (optional), agent/motion.md, the case
-files and agent/evidence/E-*.md, and writes one self-contained outputs/report.html: the Report text with every Evidence ID opening
-its quote, translation and Audit verdict; charts of the record (Evidence quality and Audit
+Reads outputs/report.md, then agent/figures.json (optional), agent/motion.md, agent/state.md
+(optional), the case files and agent/evidence/E-*.md, and writes one self-contained
+outputs/report.html: the Report text with every Evidence ID opening its quote, translation and Audit verdict; charts of the record (Evidence quality and Audit
 results per Side, crux status per Dimension), each with an info pop-up that explains it;
-and the Judge's figures from figures.json; and, when outputs/confrontation.md exists, the
+the Evidence Requests the debate could not get (from state.md, as written there);
+the Judge's figures from figures.json; and, when outputs/confrontation.md exists, the
 Confrontation tab (each Dimension's turns as chat bubbles; the check is in ledger.py).
 
 The interface language follows "Report language" in motion.md (English and Slovenian
@@ -29,8 +30,10 @@ Prints problems one per line, like ledger.py:
            failed the Audit or was never audited
   CAPTION  a figure's caption or note states a number (a rate, or an amount of 100 or
            more) that is neither in the figure's data nor in its Evidence quotes
-  STATUS   a Factual Crux in the Report lacks its "· Status: …" marker
+  STATUS   an Open Question in the Report lacks its "· Status: …" marker
   LANG     the Report language has no interface strings; English is used
+  REQUEST  an Evidence Request in state.md has a status other than open, partial,
+           fulfilled or unavailable; it is shown as open
 Exit code 0 always.
 """
 import html
@@ -74,17 +77,17 @@ STRINGS = {
         "items": "pieces of Evidence", "of": "of", "table_view": "Table view",
         "claims_word": "Claims", "concessions": "Concessions", "pending": "still pending Evidence",
         "crux_title": "Where each Dimension stands",
-        "crux_sub": "Settled facts, Factual Cruxes by status, and Value Cruxes: the questions only your priorities can answer",
-        "crux_cols": ("Dimension", "Settled", "Factual Cruxes", "Value Cruxes"), "none": "none",
+        "crux_sub": "Settled facts, open questions by status, and what depends on your values: the questions only your priorities can answer",
+        "crux_cols": ("Dimension", "Settled", "Open questions", "Depends on your values"), "none": "none",
         "no_figure": "no figure", "evidence_col": " (Evidence)",
         "figures_lede": "What the act changes, in numbers. Every value comes from audited Evidence; hover a mark for its source, click it to read the quote.",
         "evidence_label": "Evidence",
         "PRO": "Pro", "CON": "Con",
         "passed": "passed", "partial": "partial", "failed": "failed", "not audited": "not audited",
-        "settled": "settled", "leaning Pro": "leaning Pro", "leaning Con": "leaning Con", "unsettled": "unsettled", "value crux": "value crux",
+        "settled": "settled", "leaning Pro": "leaning Pro", "leaning Con": "leaning Con", "unsettled": "unsettled", "value question": "value question",
         "Factual": "factual", "Inference": "inference", "Predictive": "predictive", "Value": "value",
         "Side": "Side", "Category": "Category", "Series": "Series", "Evidence": "Evidence",
-        "label_Settled": "Settled", "label_Factual Cruxes": "Factual Cruxes", "label_Value Cruxes": "Value Cruxes",
+        "label_Settled": "Settled", "label_Open questions": "Open questions", "label_Value questions": "Depends on your values",
         "about": "About", "close": "Close",
         "dlg": {"quote": "Quote", "translation": "Translation", "close": "Close", "source": "source", "file": "Evidence file",
                 "audit": "Audit", "tier": "Source Tier", "found": "Quote found", "supports": "Supports", "cherry": "Cherry-picked",
@@ -112,6 +115,13 @@ STRINGS = {
                        ("Value", "A view on what is right or matters more (e.g. fairness); it has no Evidence, because no source can answer it, only your priorities."),
                        ("Concessions", "How many times this Side, in its responses, conceded a Claim of the other Side because it had no counter. Conceded Claims count as settled."),
                        ("Pending Evidence", "The Claim rests on a document the Advocate could not obtain (an open Evidence Request); the Report treats it as unsupported.")],
+        "req_title": "Evidence the debate could not get",
+        "req_sub": "Evidence Requests that are still open, could not be met, or were met only in part: what each was for, what was tried, and what would get it",
+        "req_none": "Every Evidence Request was met.",
+        "req_status": {"open": "open", "unavailable": "unavailable", "partial": "partly fulfilled"},
+        "req_priority": {"critical": "critical", "nice-to-have": "nice-to-have"},
+        "req_fields": {"for": "For Claims", "needed": "Needed", "tried": "Tried", "where": "Where to get it",
+                       "effort": "Effort", "missing": "Still missing"},
     },
     "sl": {
         "lang": "sl", "title_prefix": "Poročilo o razpravi: ", "kicker": "Poročilo o razpravi",
@@ -127,17 +137,17 @@ STRINGS = {
         "items": "dokazov", "of": "od", "table_view": "Prikaz v tabeli",
         "claims_word": "trditev", "concessions": "priznanj", "pending": "trditev še čaka na dokaze",
         "crux_title": "Stanje po področjih",
-        "crux_sub": "Razrešena dejstva, dejstvena ključna vprašanja po stanju in vrednostna ključna vprašanja: vprašanja, na katera lahko odgovorijo le vaše prioritete",
-        "crux_cols": ("Področje", "Razrešeno", "Dejstvena ključna vprašanja", "Vrednostna ključna vprašanja"), "none": "jih ni",
+        "crux_sub": "Razrešena dejstva, odprta vprašanja po stanju in kar je odvisno od vaših vrednot: vprašanja, na katera lahko odgovorijo le vaše prioritete",
+        "crux_cols": ("Področje", "Razrešeno", "Odprta vprašanja", "Odvisno od vaših vrednot"), "none": "jih ni",
         "no_figure": "ni podatka", "evidence_col": " (dokazi)",
         "figures_lede": "Kaj zakon spreminja, v številkah. Vsaka vrednost izhaja iz preverjenih dokazov; za vir se z miško postavite na oznako, s klikom preberete navedek.",
         "evidence_label": "Dokazi",
         "PRO": "Za", "CON": "Proti",
         "passed": "ustreza", "partial": "delno ustreza", "failed": "ne ustreza", "not audited": "ni preverjeno",
-        "settled": "razrešeno", "leaning Pro": "v prid strani Za", "leaning Con": "v prid strani Proti", "unsettled": "nerazrešeno", "value crux": "vrednostno vprašanje",
+        "settled": "razrešeno", "leaning Pro": "v prid strani Za", "leaning Con": "v prid strani Proti", "unsettled": "nerazrešeno", "value question": "vrednostno vprašanje",
         "Factual": "dejstvenih", "Inference": "sklepov", "Predictive": "napovedi", "Value": "vrednostnih",
         "Side": "Stran", "Category": "Kategorija", "Series": "Niz", "Evidence": "Dokazi",
-        "label_Settled": "Ugotovljeno", "label_Factual Cruxes": "Dejstvena ključna vprašanja", "label_Value Cruxes": "Vrednostna ključna vprašanja",
+        "label_Settled": "Ugotovljeno", "label_Open questions": "Odprta vprašanja", "label_Value questions": "Odvisno od vaših vrednot",
         "about": "Pojasnilo", "close": "Zapri",
         "dlg": {"quote": "Navedek", "translation": "Prevod", "close": "Zapri", "source": "vir", "file": "Datoteka dokaza",
                 "audit": "Preverjanje", "tier": "Raven vira", "found": "Navedek najden", "supports": "Podpira", "cherry": "Selektivno izbran",
@@ -165,6 +175,13 @@ STRINGS = {
                        ("vrednostna", "Stališče o tem, kaj je prav ali pomembneje (npr. pravičnost); nima dokazov, saj nanje ne more odgovoriti noben vir, temveč le vaše prioritete."),
                        ("priznanja", "Kolikokrat je ta stran v odgovorih priznala trditev nasprotne strani, ker nanjo ni imela protiargumenta. Priznane trditve se štejejo kot razrešene."),
                        ("čaka na dokaze", "Trditev se opira na dokument, ki ga zagovornik ni mogel pridobiti (odprta zahteva za dokaz); v poročilu velja za nepodprto.")],
+        "req_title": "Dokazi, ki jih razprava ni dobila",
+        "req_sub": "Zahteve za dokaze, ki so še odprte, jih ni bilo mogoče izpolniti ali so bile izpolnjene le delno: za kaj so bile, kaj je bilo poskušeno in kako bi dokaz lahko dobili",
+        "req_none": "Vse zahteve za dokaze so bile izpolnjene.",
+        "req_status": {"open": "odprta", "unavailable": "ni na voljo", "partial": "delno izpolnjena"},
+        "req_priority": {"critical": "ključna", "nice-to-have": "dobrodošla"},
+        "req_fields": {"for": "Za trditve", "needed": "Potrebno", "tried": "Poskušeno", "where": "Kje ga dobiti",
+                       "effort": "Zahtevnost", "missing": "Še manjka"},
     },
 }
 LANG_NAMES = {"english": "en", "en": "en", "slovenian": "sl", "slovene": "sl", "slovenščina": "sl", "slovensko": "sl", "sl": "sl"}
@@ -179,7 +196,11 @@ def T(k):
 STATUS_WORDS = {w: k for lang in STRINGS.values() for k in STATUS for w in (k, lang[k])}
 STATUS_RE = "|".join(sorted(map(re.escape, STATUS_WORDS), key=len, reverse=True))
 STATUS_MARK = rf"· (?:Status|Stanje): ({STATUS_RE})\b(?: \([^)]*\))?"
-LABEL_WORDS = {lang[f"label_{k}"]: k for lang in STRINGS.values() for k in ("Settled", "Factual Cruxes", "Value Cruxes")}
+BLOCKS = ("Settled", "Open questions", "Value questions")
+# Labels older Reports used before Open Questions and Value Questions were renamed; still read.
+LEGACY_LABELS = {"Factual Cruxes": "Open questions", "Dejstvena ključna vprašanja": "Open questions",
+                 "Value Cruxes": "Value questions", "Vrednostna ključna vprašanja": "Value questions"}
+LABEL_WORDS = {lang[f"label_{k}"]: k for lang in STRINGS.values() for k in BLOCKS} | LEGACY_LABELS
 LABEL_RE = "|".join(sorted(map(re.escape, LABEL_WORDS), key=len, reverse=True))
 
 
@@ -262,6 +283,45 @@ def load_cases(folder):
     return claims, concessions
 
 
+REQ_COLS = {"ID": "ids", "Priority": "priority", "For": "for", "Status": "status", "Needed": "needed",
+            "Tried": "tried", "Where": "where", "Effort": "effort", "Fulfilled by": "fulfilled"}
+REQ_STATUS = ("open", "unavailable", "partial")  # the unmet ones, in the order they are listed
+
+
+def unmet_requests(state_text):
+    """The Evidence Requests in state.md that are not met (open, unavailable, partial).
+
+    None when state.md has no Evidence Requests table, which is not the same as every request met.
+    """
+    m = re.search(r"^## Evidence Requests\s*\n(.*?)(?=^## |\Z)", state_text, re.S | re.M)
+    rows = [ln.strip().strip("|").split("|") for ln in (m.group(1) if m else "").splitlines() if ln.strip().startswith("|")]
+    if not rows:
+        return None
+    keys = [REQ_COLS.get(c.strip()) for c in rows[0]]
+    out = []
+    for cells in rows[1:]:
+        if all(set(c.strip()) <= set("-: ") for c in cells):
+            continue
+        r = {k: "" for k in REQ_COLS.values()}
+        r.update({k: c.strip() for k, c in zip(keys, cells) if k})
+        r["ids"] = [i.strip() for i in re.sub(r"\s*\(merged\)\s*$", "", r["ids"], flags=re.I).split("+")]
+        # the status is read by its leading word, in any case: "Fulfilled", "unavailable (user declined)";
+        # the older "fulfilled (partial)" means partial
+        word = re.match(r"[a-z-]*", r["status"].lower()).group(0)
+        r["status"] = "partial" if re.match(r"fulfilled\s*\(partial", r["status"], re.I) else (word or r["status"])
+        missing = re.search(r"\bStill missing:\s*(.*)", r["fulfilled"], re.I | re.S)
+        r["missing"] = missing.group(1).strip() if missing else ""
+        if r["status"] == "fulfilled":
+            continue
+        if r["status"] not in REQ_STATUS:
+            problems.append(f"REQUEST {' + '.join(r['ids'])}: status '{r['status']}' is not one of "
+                            f"open, partial, fulfilled, unavailable; shown as open")
+            r["status"] = "open"
+        out.append(r)
+    # sorted() is stable, so the table's own order breaks ties
+    return sorted(out, key=lambda r: (REQ_STATUS.index(r["status"]), not r["priority"].lower().startswith("critical")))
+
+
 def read_motion(folder, lang=None):
     """The Motion line and the domain's Source Tier examples ("- A: …" lines)."""
     p = folder / f"motion-{lang}.md" if lang else None
@@ -277,7 +337,7 @@ def read_motion(folder, lang=None):
 
 
 def crux_map(report):
-    """Per Dimension: settled count, factual crux statuses, value crux count."""
+    """Per Dimension: settled count, Open Question statuses, Value Question count."""
     sec = re.search(r"^## 2\..*?\n(.*?)(?=^## 3\.|\Z)", report, re.S | re.M)
     out = []
     for m in re.finditer(r"^### (.+?)\n(.*?)(?=^### |\Z)", sec.group(1) if sec else "", re.S | re.M):
@@ -285,14 +345,14 @@ def crux_map(report):
         parts = {LABEL_WORDS[k]: v for k, v in re.findall(rf"^\*\*({LABEL_RE})\*\*(?: \([^)]*\))?:?(.*?)(?=^\*\*(?:{LABEL_RE})\*\*|\Z)", body, re.S | re.M)}
         bullets = lambda t: [b for b in re.findall(r"^\s*[-*] (.+)$", t or "", re.M)]  # noqa: E731
         statuses = []
-        for b in bullets(parts.get("Factual Cruxes")):
+        for b in bullets(parts.get("Open questions")):
             s = re.search(STATUS_MARK, b)
             if s:
                 statuses.append(STATUS_WORDS[s.group(1)])
             else:
-                problems.append(f"STATUS {dim}: Factual Crux without '· Status: …' — {b[:80]}")
+                problems.append(f"STATUS {dim}: Open Question without '· Status: …' — {b[:80]}")
         out.append({"dim": dim, "settled": len(bullets(parts.get("Settled"))),
-                    "factual": statuses, "value": len(bullets(parts.get("Value Cruxes")))})
+                    "factual": statuses, "value": len(bullets(parts.get("Value questions")))})
     return out
 
 
@@ -403,7 +463,8 @@ def info_claims():
     return info("claims", T("info_claims_title"), f'<p>{esc(T("info_claims_intro"))}</p><dl>{dl}</dl>')
 
 
-def record_charts(ev, claims, concessions, cruxes, domain_tiers):
+def record_charts(ev, claims, concessions, cruxes, domain_tiers, reqs=None):
+    """The glance tab's charts; reqs is the list of unmet Evidence Requests, or None when there is no state file."""
     tier_col = {"A": "var(--seq-a)", "B": "var(--seq-b)", "C": "var(--seq-c)", "D": "var(--seq-d)", "not audited": "var(--none)"}
     audit_col = {"passed": "var(--good)", "partial": "var(--warning)", "failed": "var(--critical)", "not audited": "var(--none)"}
     side_name = {s: T(s) for s in SIDES}
@@ -448,12 +509,32 @@ def record_charts(ev, claims, concessions, cruxes, domain_tiers):
         for c in cruxes:
             chips = "".join(f'<i class="chip" style="--c:{st_col[s]}" data-tip="{esc(T(s))}" tabindex="0"></i>' for s in c["factual"]) or f'<span class="muted">{T("none")}</span>'
             anchor = "dim-" + re.sub(r"[^a-z0-9]+", "-", c["dim"].lower()).strip("-")
-            vchips = f'<i class="vchip" data-tip="{esc(T("value crux"))}" tabindex="0"></i>' * c["value"] or f'<span class="muted">{T("none")}</span>'
+            vchips = f'<i class="vchip" data-tip="{esc(T("value question"))}" tabindex="0"></i>' * c["value"] or f'<span class="muted">{T("none")}</span>'
             out.append(f'<tr><td><a href="#{anchor}">{esc(c["dim"])}</a></td><td class="num">{c["settled"]}</td><td>{chips}</td>'
                        f'<td>{vchips}</td></tr>')
-        out.append("</tbody></table>" + legend([(k, st_col[k]) for k in STATUS] + [("value crux", "var(--value)")]) + "</figure>")
+        out.append("</tbody></table>" + legend([(k, st_col[k]) for k in STATUS] + [("value question", "var(--value)")]) + "</figure>")
+    if reqs is not None:
+        out.append(requests_html(reqs))
     out.append("</section>")
     return "".join(out)
+
+
+def requests_html(reqs):
+    """One card per unmet Evidence Request; the text is shown as the state file has it."""
+    head = (f'<figure class="wide" id="requests"><figcaption><b>{esc(T("req_title"))}</b>'
+            f'<span>{esc(T("req_sub"))}</span></figcaption>')
+    if not reqs:
+        return head + f'<p class="muted">{esc(T("req_none"))}</p></figure>'
+    st_col = {"open": "var(--critical)", "unavailable": "var(--muted)", "partial": "var(--warning)"}
+    cards = []
+    for r in reqs:
+        base = next((k for k in T("req_priority") if r["priority"].lower().startswith(k)), "")
+        prio = (T("req_priority")[base] + r["priority"][len(base):]) if base else r["priority"]
+        fields = "".join(f'<dt>{esc(T("req_fields")[k])}</dt><dd>{esc(r[k])}</dd>' for k in T("req_fields") if r[k])
+        cards.append(f'<div class="req" style="--c:{st_col[r["status"]]}"><div class="rh"><b>{esc(" + ".join(r["ids"]))}</b>'
+                     f'<span class="rs">{esc(T("req_status")[r["status"]])}</span>'
+                     + (f'<span class="rp">{esc(prio)}</span>' if prio else "") + f'</div><dl>{fields}</dl></div>')
+    return head + "".join(cards) + "</figure>"
 
 
 # ---------- Judge's figures ----------
@@ -721,6 +802,11 @@ th{color:var(--ink2);font-weight:600}td.num{font-variant-numeric:tabular-nums}
 .cruxmap td:first-child{width:38%}.chip,.vchip{display:inline-block;width:14px;height:14px;border-radius:50%;margin:2px 4px 0 0;vertical-align:middle}
 .chip{background:var(--c);cursor:pointer}.vchip{border:2px solid var(--value)}
 .muted{color:var(--muted);font-size:13px}
+.req{border-left:3px solid var(--c);padding:10px 0 4px 12px;margin:0 0 12px}.req+.req{border-top:1px solid var(--grid);padding-top:12px}
+.rh{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;overflow-wrap:anywhere}.rs,.rp{font-size:13px;color:var(--ink2)}.rs{font-weight:600}
+.req dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:8px 0 0;font-size:14px}
+.req dt{color:var(--ink2);font-weight:600}.req dd{margin:0;overflow-wrap:anywhere}
+@media (max-width:560px){.req dl{grid-template-columns:1fr;gap:0}.req dd{margin-bottom:6px}}
 .note{font-size:13px;color:var(--ink2);margin:6px 0 0}.src{font-size:13px;color:var(--ink2);margin:6px 0 0}
 .flag{font-size:11px;padding:1px 6px;border-radius:8px;border:1px solid var(--axis);color:var(--ink2)}
 article table{display:block;overflow-x:auto}
@@ -818,7 +904,8 @@ def render_body(report_md, figures_by_dim):
     # Evidence links, however the Report wrote the path (evidence/… or ../agent/evidence/…), point at EVDIR
     body = re.sub(rf'<a href="(?:[\w.%-]+/)*evidence/({EID})\.md">', lambda m: f'<a class="ev" href="{EVDIR}/{m.group(1)}.md" data-ev="{m.group(1)}">', body)
     body = re.sub(STATUS_MARK, lambda m: f'<span class="status">{esc(T(STATUS_WORDS[m.group(1)]))}</span>', body)
-    body = re.sub(rf"<strong>({LABEL_RE})</strong>(?: \([^)]*\))?", lambda m: f"<strong>{esc(T('label_' + LABEL_WORDS[m.group(1)]))}</strong>", body)
+    # only block labels ("**Settled**:"); a label word in running text (old Methodology bullets) is left as written
+    body = re.sub(rf"<strong>({LABEL_RE})</strong>(?: \([^)]*\))?(?=:)", lambda m: f"<strong>{esc(T('label_' + LABEL_WORDS[m.group(1)]))}</strong>", body)
 
     # section 2: a paragraph between a Dimension heading and its first label is its lead paragraph,
     # styled as a lede, with the Dimension's figures after it
@@ -900,6 +987,8 @@ def main():
             e["url"] = urllib.parse.quote(os.path.relpath(folder / e["url"], outdir))
     claims, concessions = load_cases(folder)
     cruxes = crux_map(report)
+    state_p = folder / "state.md"
+    reqs = unmet_requests(state_p.read_text(encoding="utf-8")) if state_p.exists() else None
 
     figs = []
     fp = pick("figures", ".json")
@@ -941,7 +1030,7 @@ def main():
     # A tab with no content is not shown; a later tab is one more entry here.
     tabs = [(k, label, content) for k, label, content in [
         ("report", "nav_report", f'<article id="report"><h2>{esc(T("nav_report"))}</h2>{body}</article>'),
-        ("record", "nav_record", record_charts(ev, claims, concessions, cruxes, domain_tiers) + key),
+        ("record", "nav_record", record_charts(ev, claims, concessions, cruxes, domain_tiers, reqs) + key),
         ("confrontation", "nav_confrontation", confrontation),
         ("methodology", "nav_method", f'<article class="method">{method}</article>' if method else ""),
     ] if content]

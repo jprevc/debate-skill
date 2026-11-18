@@ -46,6 +46,7 @@ The user may give a Motion, a link or a question. They may add `quick`, which sk
   - `outputs-done`: every dispatch finished, so run only Between Stages for it.
   - `running`: rerun only the dispatches whose output is incomplete. An Advocate's case file is complete when it has its final `## Evidence Requests` section, and an Audit batch is complete when its batch file exists. Keep the complete outputs.
   - `pending`: run the Stage.
+  - If the Evidence Requests table in `state.md` has no `Needed`, `Tried`, `Where` and `Effort` columns (a debate from before they existed), add them first, and fill every row from the request blocks in the case files and from the log, by the rules in Between Stages step 3. Do this before running a Stage or rebuilding the Report, even for a finished debate.
   - A `state.md` from before Stage 6 existed has no Confrontation row. Add the row as `pending` and the line `- Confrontation: on`, and log it, so resuming a finished debate gives it a Confrontation.
 - Otherwise run Framing.
 
@@ -134,14 +135,16 @@ After every Stage, in this order:
    - Rerun the script until it prints no problems.
 2. **Dimensions.** Read the "Proposed Dimensions" in the Opening Cases. Add the ones that are genuine aspects of the Motion to `motion.md`, and log each one in `state.md`. Tell the user what you added.
 3. **Evidence Requests.**
-   - Collect them from the Stage outputs and add them to `state.md` as `open`.
+   - Collect them from the Stage outputs and add them to `state.md` as `open`, one row per request, filling every column as the template's comment says:
+     - `Needed`, `Where`, `Effort` and `For` from the latest Stage in which the request appears. When an Advocate raises it again, replace them with the new text.
+     - `Tried` accumulates: the Advocate's "Why I can't get it", then its `Tried` attempts from every Stage. Keep the earlier attempts, add the new ones, and add your own triage and fetch attempts below, each starting with `orchestrator:` and saying what failed.
    - **Triage** every open request before asking the user. Advocates of one Stage work in parallel, and each sees only its own fetches, so many requests can be met without the user:
      - *Already in the record.* Search `ledger.md`, `evidence/files/` and `../sources/` for the requested document. Another Advocate may have fetched it already.
      - *Tool failure.* If `Tried` shows a certificate, DNS, timeout or JavaScript failure, retry those URLs with `scripts/evidence.py fetch`, with `--render` for JavaScript. Check that the domain is the institution's real one, and use `reference/sites.md` for the site's direct document links.
-     - *Duplicates.* Merge requests from different Advocates for the same document into one item.
-     - For either, mark the request `fulfilled` with the cached file's path under `evidence/files/` in "Fulfilled by". The requesting Advocate records Evidence from it in its next Stage. Fetch only the requested document, and quote nothing from it yourself.
+     - *Duplicates.* Merge requests from different Advocates for the same document into one row, with the IDs joined by ` + ` (`R-PRO-B-1 + R-CON-B-2`), and combine their `For` and `Tried`.
+     - For either, mark the request `fulfilled` with the cached file's path under `evidence/files/` in "Fulfilled by". If the file holds only part of what was requested, mark it `partial` instead, and add a sentence starting `Still missing:` after the path; the rest still goes to the user. The requesting Advocate records Evidence from it in its next Stage. Fetch only the requested document, and quote nothing from it yourself.
    - Ask the user for the rest in one message, critical ones first. For each one give: what it is, which Claims it is for, the `Where` URLs and identifiers, the `Effort`, and how to hand it over (save the file into `sources/`, give its path, or paste the text). Put the requests whose `Effort` can't be met before the decision date last, and say so.
-   - Put what the user supplies in `sources/` (pasted text as a `.txt` file there), `import` it, save it as `E-USER-NNN`, and mark the request `fulfilled` with that ID.
+   - Put what the user supplies in `sources/` (pasted text as a `.txt` file there), `import` it, save it as `E-USER-NNN`, and mark the request `fulfilled` with that ID, or `partial` with a `Still missing:` sentence when it covers only part.
    - If the user can't get something, mark it `unavailable`.
    - The debate goes on either way: pending Claims stay pending, and the Report shows them as unsupported.
 4. **State.** Mark the Stage `done`, and log anything you reran or skipped.
@@ -149,11 +152,11 @@ After every Stage, in this order:
 
 ## Finish
 
-When Stage 6 is done or skipped, update `README.md`: the status line ("finished", the date, how many Evidence Requests are still open), the Report rows, and the Dimension count and groups if they changed. Then give the user:
+When Stage 6 is done or skipped, update `README.md`: the status line ("finished", the date, how many Evidence Requests are still unmet: `open`, `partial` or `unavailable`), the Report rows, and the Dimension count and groups if they changed. Then give the user:
 - the paths to `outputs/report.html` (the Report with charts and the Confrontation tab; it opens offline in a browser), `outputs/report.md` and `outputs/confrontation.md`
 - any Confrontation issue the Checker still reported after round 2; with `no-confrontation`, one line saying the Confrontation was skipped and that resuming the debate adds it
 - the Judge's three-line summary of the main cruxes
-- any Evidence Requests still `open`
+- every Evidence Request still unmet (`open`, `partial` or `unavailable`), each with its status; `outputs/report.html` lists them too, with what was tried
 
 If the user later supplies Evidence for one of those, add it and rerun from Stage 4a. That means a short audit, then a new Judgment and a new Confrontation.
 
@@ -164,7 +167,7 @@ If the user asks for the Report in another language, dispatch one fresh `general
 - the same sections, subsections, bullets and Evidence links, in the same order, including each Dimension's untitled lead paragraph;
 - the domain's own terms, taken from the Evidence quotes (the act's and institutions' names as the sources write them), not literal translations;
 - the Side names of that language's interface (Slovenian: Za / Proti); Claim and Evidence IDs stay as they are, because they are file links;
-- the `· Status:` markers and crux labels in the original language, or in the target language where `report_html.py` lists them;
+- the `· Status:` markers and block labels (Settled, Open questions, Depends on your values) in the original language, or in the target language where `report_html.py` lists them;
 - in the Confrontation, every turn with the same ID line and Evidence links, the Dimension headings as the translated Report names them, and the turn headers in the target language where `templates/confrontation.md` lists them (Slovenian: `**Za · Uvodni nastop**`), otherwise in English.
 
 Then run `python3 <skill dir>/scripts/ledger.py <folder>`, and have the translator fix any `CONFRONTATION` line about `confrontation-<lang>.md`; then run `uv run --script <skill dir>/scripts/report_html.py <folder> --lang <lang>`, which writes `outputs/report-<lang>.html`. If the Confrontation is written after a Report was already translated, translate it the same way then. Add the translated files to `README.md` (the Report rows, the `agent/` table and the rebuild commands). From then on, make every later fix to the Report or the Confrontation in both versions, and rebuild both.
