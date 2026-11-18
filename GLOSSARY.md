@@ -21,7 +21,7 @@ A distinct aspect of the Motion debated separately, such as one provision of a b
 _Avoid_: Sub-issue, aspect, topic
 
 **Stage**:
-One step of the debate protocol: Framing, Opening Case, Rebuttal, Evidence Audit, Rejoinder, Judgment.
+One step of the debate protocol: Framing, Opening Case, Rebuttal, Evidence Audit, Rejoinder, Judgment, Confrontation.
 _Avoid_: Phase, round
 
 ## Participants
@@ -37,6 +37,14 @@ _Avoid_: Fact-checker, verifier
 **Judge**:
 A neutral subagent that writes the Report from the record alone, without declaring a winner.
 _Avoid_: Moderator, arbiter
+
+**Editor**:
+A neutral subagent that turns the finished record into a turn-by-turn rendering of the two Sides, adding no arguments and no Evidence of its own.
+_Avoid_: Writer, narrator
+
+**Checker**:
+A neutral subagent that compares each turn of the Confrontation with the Claims and responses it names, and flags anything the record does not say.
+_Avoid_: Auditor (which checks Evidence against its sources), reviewer
 
 ## Evidence
 
@@ -86,6 +94,14 @@ _Avoid_: Factual Crux
 **Value Question**:
 A disagreement that turns on what one prioritizes, not on facts. In the Report it appears under "Depends on your values".
 _Avoid_: Value Crux
+
+**Confrontation**:
+A rendering of the finished record as Turns between the Sides, one Dimension at a time, and the Stage that writes it. It is an edited rendering of the written cases, not a real conversation, and it carries no verdict.
+_Avoid_: Debate (the whole protocol), exchange, conversation, face-off
+
+**Turn**:
+One Side's part of the Confrontation at one Stage in one Dimension: a short paraphrase of up to three of its Claims or responses, which it names.
+_Avoid_: Message, round, bubble
 
 **Cheat Sheet**:
 The per-Side part of the Report listing the arguments opponents are likely to raise and the best Evidence-backed counters.

@@ -16,6 +16,12 @@ Writes <debate-folder>/ledger.md and prints problems to stdout, one per line:
   BADAUDIT    an audited Evidence file lacks a valid Result, Quote found, Cherry-picked or
               Source Tier value
   TIERMIX     Evidence quoted from the same cached source got different Source Tiers
+  CONFRONTATION
+              outputs/confrontation.md (when it exists) cites a Claim or response its turn's Side
+              didn't make at that Stage in that Dimension, leaves one out of both its lists, paraphrases
+              more than 3, cites Evidence that is missing, failed the Audit or isn't cited by what it
+              paraphrases, breaks the turn format or order, or misses a Dimension; or a
+              confrontation-<lang>.md doesn't mirror it
 Exit code 0 always; problems are for the orchestrator to act on.
 """
 import re
@@ -144,6 +150,168 @@ def check_cases(folder):
     return problems
 
 
+# ---------- the Confrontation (outputs/confrontation.md) ----------
+
+SIDES = ("PRO", "CON")
+STAGES = ("opening", "rebuttal", "rejoinder")
+# Turn header words, canonical key -> the words accepted for it (English, Slovenian)
+SIDE_WORDS = {"PRO": ("Pro", "Za"), "CON": ("Con", "Proti")}
+STAGE_WORDS = {"opening": ("Opening", "Uvodni nastop"), "rebuttal": ("Rebuttal", "Odgovor"), "rejoinder": ("Rejoinder", "Replika")}
+NOT_SHOWN_WORDS = ("Not shown", "Ni prikazano")
+
+
+def any_word(words):
+    """A regex alternative of every word in a {key: words} map."""
+    return "|".join(re.escape(w) for ws in words.values() for w in ws)
+
+
+TURN_RE = re.compile(rf"^\*\*(?P<side>{any_word(SIDE_WORDS)}) · (?P<stage>{any_word(STAGE_WORDS)})\*\*\s*$")
+# a bold line that starts with a Side word but is not a valid turn header ("**Pro · Rebuttal:**")
+NEAR_TURN_RE = re.compile(rf"^\*\*(?:{any_word(SIDE_WORDS)})\b.*\*\*\s*$")
+ITEM = rf"(?:Re )?{CID}"
+IDLINE_RE = re.compile(rf"^\((?P<shown>{ITEM}(?:, {ITEM})*)(?:; (?:{'|'.join(NOT_SHOWN_WORDS)}): (?P<hidden>{ITEM}(?:, {ITEM})*))?\)\s*$")
+# A Claim header as the record holds it; a restatement may carry a note after the ID ("**CON-A-2 (restated)**")
+CLAIM_ANY_RE = re.compile(rf"^\*\*(?P<id>{CID})(?: \([^)]*\))?\*\* · Dimension: (?P<dim>.+?) · Type: \w+(?P<rest>.*)$")
+RESP_ANY_RE = re.compile(rf"^\*\*Re (?P<id>{CID})\*\* · (?:Rebut|Mitigate|Concede)(?P<rest>.*)$")
+
+
+def _canon(word, words):
+    return next(k for k, ws in words.items() if word in ws)
+
+
+def parse_confrontation(text):
+    """Sections of a Confrontation: [{dim, line, turns: [{side, stage, label, line, text, shown, hidden, idline}]}].
+    side is PRO | CON and stage opening | rebuttal | rejoinder; shown and hidden list items such as
+    "PRO-1" or "Re CON-3"; idline is False when the turn does not end with a valid ID line."""
+    sections, turn = [], None
+    for i, ln in enumerate(text.splitlines(), 1):
+        if ln.startswith("## "):
+            sections.append({"dim": ln[3:].strip(), "line": i, "turns": []})
+            turn = None
+        elif (m := TURN_RE.match(ln)) and sections:
+            turn = {"side": _canon(m["side"], SIDE_WORDS), "stage": _canon(m["stage"], STAGE_WORDS), "label": f"{m['side']} · {m['stage']}", "line": i,
+                    "lines": [], "shown": [], "hidden": [], "idline": False}
+            sections[-1]["turns"].append(turn)
+        elif turn is not None:
+            turn["lines"].append(ln)
+    for sec in sections:
+        for t in sec["turns"]:
+            lines = [ln for ln in t.pop("lines") if ln.strip() and not ln.lstrip().startswith("<!--")]
+            m = IDLINE_RE.match(lines[-1].strip()) if lines else None
+            if m:
+                t["idline"] = True
+                t["shown"] = m["shown"].split(", ")
+                t["hidden"] = m["hidden"].split(", ") if m["hidden"] else []
+                lines = lines[:-1]
+            t["text"] = "\n".join(lines)
+    return sections
+
+
+def record_items(folder):
+    """What each Side said at each Stage: {(side, stage): {item: (dimension, Evidence IDs)}}, where an item is a
+    Claim ID ("PRO-3") or a response ("Re CON-3"). A response's Dimension is that of the Claim it answers."""
+    items, claim_dim = {}, {}
+    for f in sorted(folder.glob("*.md")):
+        fm = FILE_RE.match(f.stem)
+        if not fm:
+            continue
+        key = (fm["side"].upper(), fm["stage"])
+        for ln in f.read_text(encoding="utf-8").splitlines():
+            if m := CLAIM_ANY_RE.match(ln):
+                claim_dim.setdefault(m["id"], m["dim"].strip())
+                items.setdefault(key, {})[m["id"]] = (m["dim"].strip(), set(ID_RE.findall(m["rest"])))
+            elif m := RESP_ANY_RE.match(ln):
+                items.setdefault(key, {})[f"Re {m['id']}"] = (None, set(ID_RE.findall(m["rest"])))
+    for got in items.values():
+        for it, (dim, ev) in got.items():
+            if dim is None:
+                got[it] = (claim_dim.get(it[3:], "?"), ev)
+    return items
+
+
+def check_mirror(original, path):
+    """A translated Confrontation has the original's sections and turns, with the same IDs and Evidence."""
+    def shape(t):
+        return t["side"], t["stage"], t["shown"], t["hidden"], sorted(set(ID_RE.findall(t["text"])))
+    sections = parse_confrontation(path.read_text(encoding="utf-8"))
+    if len(sections) != len(original):
+        return [f"CONFRONTATION {path.name}: {len(sections)} sections, but confrontation.md has {len(original)}"]
+    problems = []
+    for sec, orig in zip(sections, original):
+        if [shape(t) for t in sec["turns"]] == [shape(t) for t in orig["turns"]]:
+            continue
+        bad = next((t for t, o in zip(sec["turns"], orig["turns"]) if shape(t) != shape(o)), None)
+        where = f"{bad['line']}: {sec['dim']}, {bad['label']}" if bad else f"{sec['line']}: {sec['dim']}"
+        problems.append(f"CONFRONTATION {path.name}:{where}: does not mirror '{orig['dim']}' in confrontation.md "
+                        "(turns, IDs and Evidence must be the same)")
+    return problems
+
+
+def check_confrontation(folder, outdir, evidence):
+    """CONFRONTATION problems in outputs/confrontation.md; evidence is {id: (frontmatter, text)}."""
+    p = outdir / "confrontation.md"
+    if not p.exists():
+        return []
+    problems = []
+    items = record_items(folder)
+    dims = dimensions(folder)
+    text = p.read_text(encoding="utf-8")
+    sections = parse_confrontation(text)
+    for i, ln in enumerate(text.splitlines(), 1):
+        if NEAR_TURN_RE.match(ln) and not TURN_RE.match(ln):
+            problems.append(f"CONFRONTATION {p.name}:{i}: '{ln.strip()}' is not a turn header; write **<Side> · <Stage>**, e.g. **Pro · Rebuttal**")
+    order = [(stage, side) for stage in STAGES for side in SIDES]
+    for sec in sections:
+        dim = sec["dim"]
+        if dims and dim not in dims:
+            problems.append(f"CONFRONTATION {p.name}:{sec['line']}: '{dim}' is not a Dimension in motion.md")
+        last = -1
+        for t in sec["turns"]:
+            name = f"{t['side'].title()} {t['stage'].title()}"
+            where = f"CONFRONTATION {p.name}:{t['line']}: {dim}, {name}"
+            pos = order.index((t["stage"], t["side"]))
+            if pos <= last:
+                problems.append(f"{where}: out of record order (Pro, then Con, at Opening, Rebuttal, Rejoinder), or a second {name} turn")
+            last = max(last, pos)
+            if not t["idline"]:
+                problems.append(f"{where}: does not end with an ID line, e.g. (PRO-1, Re CON-2; Not shown: PRO-3)")
+            if len(t["shown"]) > 3:
+                problems.append(f"{where}: paraphrases {len(t['shown'])} items; at most 3, the rest go under Not shown")
+        turns = {(t["side"], t["stage"]): t for t in sec["turns"]}
+        for stage in STAGES:
+            for side in SIDES:
+                said = {it: v for it, v in items.get((side, stage), {}).items() if v[0] == dim}
+                name = f"{side.title()} {stage.title()}"
+                t = turns.get((side, stage))
+                if t is None:
+                    if said:
+                        problems.append(f"CONFRONTATION {p.name}:{sec['line']}: {dim}: no {name} turn, but the record has {', '.join(said)}")
+                    continue
+                where = f"CONFRONTATION {p.name}:{t['line']}: {dim}, {name}"
+                for it in t["shown"] + t["hidden"]:
+                    if it not in said:
+                        problems.append(f"{where}: {it} is not a {side.title()} {stage} item in this Dimension")
+                missing = [it for it in said if it not in t["shown"] + t["hidden"]]
+                if missing:
+                    problems.append(f"{where}: {', '.join(missing)} neither paraphrased nor listed under Not shown")
+                backing = {e for it in t["shown"] if it in said for e in said[it][1]}
+                for eid in dict.fromkeys(ID_RE.findall(t["text"])):
+                    if eid not in evidence:
+                        problems.append(f"{where}: {eid} has no Evidence file")
+                    elif audit_result(evidence[eid][1]) == "failed":
+                        problems.append(f"{where}: {eid} failed the Audit")
+                    elif eid not in backing:
+                        problems.append(f"{where}: {eid} is cited by none of {', '.join(t['shown']) or 'the items it paraphrases'}")
+    for tp in sorted(outdir.glob("confrontation-*.md")):
+        if re.fullmatch(r"confrontation-[a-z]{2,3}", tp.stem):  # a translation; not the Checker's confrontation-check.md
+            problems += check_mirror(sections, tp)
+    covered = {sec["dim"] for sec in sections}
+    for d in sorted({v[0] for got in items.values() for v in got.values()} - covered):
+        if not dims or d in dims:
+            problems.append(f"CONFRONTATION {p.name}: Dimension '{d}' has Claims in the record but no section")
+    return problems
+
+
 def main():
     folder = Path(sys.argv[1])
     folder = folder / "agent" if (folder / "agent").is_dir() else folder  # a project folder, or its agent/
@@ -196,6 +364,9 @@ def main():
     for p in check_cases(folder):
         print(p)
     for p in check_audits(evidence):
+        print(p)
+    outdir = folder.parent / "outputs" if folder.name == "agent" else folder  # an older flat folder holds its outputs
+    for p in check_confrontation(folder, outdir, evidence):
         print(p)
     tiers = {}  # source_file -> {tier: [ids]}
     for eid, (fm, text) in evidence.items():

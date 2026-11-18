@@ -5,3 +5,5 @@ The Report maps Open Questions and Value Questions and gives a Cheat Sheet for e
 ## Consequences
 
 Verdict-free does not mean false balance: when one Side's case rests on weaker Source Tiers or mostly Value Claims, the Report says so plainly.
+
+The Confrontation is bound by the same rule. It ends without a summary or a verdict, adds nothing beyond the record, and says on its face that it is an edited rendering of the written cases. Both Sides write each Stage in parallel, so the Confrontation's order is a fixed convention: Pro first at every Stage, Con speaking last in each Dimension. The last word is not the winning one.
