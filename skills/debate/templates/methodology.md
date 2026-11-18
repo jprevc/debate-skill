@@ -28,8 +28,8 @@ This Report was produced by a fixed procedure for structured debate. Every role 
 
 **What this Report is and is not.** The Report is a map of the disputed questions. It does not recommend a decision.
 
-- **Factual Cruxes** are disagreements that Evidence could settle. They are marked settled, leaning towards one Side, or unsettled.
-- **Value Cruxes** remain even when the Sides agree on the facts. Only the reader can decide them, by their own priorities.
+- **Open questions** are disagreements that Evidence could settle. They are marked settled, leaning towards one Side, or unsettled.
+- **Depends on your values** lists the disagreements that remain even when the Sides agree on the facts. Only the reader can decide them, by their own priorities.
 
 Every factual statement in the Report links to Evidence that the Audit did not reject. Where the Auditor found a limit (the quote supports a Claim only in part, or its context narrows it), the Evidence window shows it as a partial result.
 
