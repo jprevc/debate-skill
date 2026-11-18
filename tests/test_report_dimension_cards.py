@@ -86,6 +86,12 @@ def test_section_2_opens_with_a_jump_list_linking_every_dimension_card():
     assert [l[0] for l in links] == card_ids
 
 
+def test_a_link_in_a_dimension_heading_is_not_nested_inside_its_jump_link():
+    report = REPORT.replace("### VAT on energy", "### VAT on energy ([E-PRIMARY-001](../agent/evidence/E-PRIMARY-001.md))")
+    jump = re.search(r'<nav class="dimjump".*?</nav>', report_html.render_body(report, {}), re.S).group(0)
+    assert jump.count("<a ") == jump.count("</a>") == 2
+
+
 def test_jump_list_label_is_translated():
     report_html.UI = report_html.STRINGS["sl"]
     sec = section2(report_html.render_body(REPORT, {}))

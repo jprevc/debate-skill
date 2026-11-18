@@ -905,8 +905,9 @@ def render_body(report_md, figures_by_dim):
 
     # section 2: a paragraph between a Dimension heading and its first label is its lead paragraph,
     # styled as a lede, with the Dimension's figures after it
-    sec2 = re.search(r"<h2>2\..*?(?=<h2>|\Z)", body, re.S)
-    sec2 = sec2.span() if sec2 else (0, 0)
+    sec2_re = re.compile(r"(<h2>(2)\..*?</h2>)(.*?)(?=<h2>|\Z)", re.S)  # (heading, its number, content)
+    sec2 = sec2_re.search(body)
+    span, sec_no = (sec2.span(), sec2.group(2)) if sec2 else ((0, 0), "")
     dims = []  # (anchor, number, heading html) of section 2's Dimensions, in order
 
     def h3(m):
@@ -914,23 +915,26 @@ def render_body(report_md, figures_by_dim):
         anchor = "dim-" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
         lead = m.group(2) or ""
         figs = "".join(figures_by_dim.pop(name, []))
-        if not sec2[0] <= m.start() < sec2[1]:
+        if not span[0] <= m.start() < span[1]:
             return f'<h3 id="{anchor}">{m.group(1)}</h3>' + lead + figs
         # a Dimension: numbered from its section, and opening a card that runs to the next Dimension
-        num = f"2.{len(dims) + 1}"
+        num = f"{sec_no}.{len(dims) + 1}"
         dims.append((anchor, num, m.group(1)))
         lead = lead.replace("<p>", '<p class="lede">', 1)
         return f'<section class="dim" id="{anchor}"><h3><span class="dnum">{num}</span> {m.group(1)}</h3>' + lead + figs
     body = re.sub(rf"<h3>(.+?)</h3>(\s*<p>(?!<strong>(?:{LABEL_RE})</strong>).*?</p>)?", h3, body, flags=re.S)
-    if dims:  # close each card where the next one opens, and the last at the end of section 2
-        s = re.search(r'<section class="dim".*?(?=<h2>|\Z)', body, re.S)
-        cards = re.split(r'(?=<section class="dim")', s.group(0))[1:]
-        # inside a card, a block label opening its paragraph is a small label on its own line, so it drops the colon
-        cards = [re.sub(rf"<p><strong>({LABEL_RE})</strong>:\s*", r'<p><strong class="blabel">\1</strong>', c) for c in cards]
-        body = body[:s.start()] + "".join(c + "</section>" for c in cards) + body[s.end():]
-        jump = "".join(f'<li><a href="#{a}"><span class="dnum">{n}</span> {h}</a></li>' for a, n, h in dims)
+    if dims:
+        # a link in a heading would nest inside the jump link, so the jump list keeps only its text
+        text = lambda h: re.sub(r"</?a\b[^>]*>", "", h)  # noqa: E731
+        jump = "".join(f'<li><a href="#{a}"><span class="dnum">{n}</span> {text(h)}</a></li>' for a, n, h in dims)
         nav = f'<nav class="dimjump" aria-label="{esc(T("dim_jump"))}"><ol>{jump}</ol></nav>'
-        body = re.sub(r"<h2>2\..*?</h2>", lambda m: m.group(0) + nav, body, count=1, flags=re.S)
+
+        def cards(m):  # the jump list under the heading; each card closed where the next one opens, the last at the section's end
+            intro, *cs = re.split(r'(?=<section class="dim")', m.group(3))
+            # inside a card, a block label opening its paragraph is a small label on its own line, so it drops the colon
+            cs = [re.sub(rf"<p><strong>({LABEL_RE})</strong>:\s*", r'<p><strong class="blabel">\1</strong>', c) for c in cs]
+            return m.group(1) + nav + intro + "".join(c + "</section>" for c in cs)
+        body = sec2_re.sub(cards, body, count=1)
     body = re.sub(rf"<h2>((?:\d+\. )?{re.escape(T('method_word'))}\b)", r'<h2 id="methodology">\1', body, count=1)
     return body
 
