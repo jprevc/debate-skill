@@ -5,6 +5,8 @@ Subcommands (run with -h for options):
   fetch  <folder> <url> [keyword ...]   download page/PDF -> cached text in evidence/files/web/, print keyword hits
                                         (--render: load it in headless Chromium first, for JavaScript sites)
   pxweb  search|meta|fetch ...          statistical tables via the PxWeb API (SiStat by default)
+  import <folder> <file> --name <slug>  text of a file the user supplied (in sources/) -> evidence/files/user-<slug>.txt;
+                                        the original is never changed, and its path becomes the Evidence url
   sources <folder> [keyword ...]        list sources already cached in evidence/files/, matching the keywords
   search <file> <keyword ...>           keyword hits in a cached text file (also works on any local .txt/.pdf)
   show   <file> <A-B>                   print paragraphs A..B (max 40) of a cached text file
@@ -12,6 +14,7 @@ Subcommands (run with -h for options):
   verify <folder> [ID ...] [--live]     check each Evidence quote against its cached source and/or the live URL
 
 Cached text files have one paragraph per line, so "line" = "paragraph" everywhere.
+<folder> is the debate's agent/ folder; a project folder that contains agent/ is accepted too.
 """
 import argparse
 import datetime
@@ -19,6 +22,7 @@ import hashlib
 import html
 import html.parser
 import json
+import os
 import re
 import ssl
 import subprocess
@@ -203,6 +207,8 @@ def load_lines(path):
     path = Path(path)
     if path.suffix.lower() == ".pdf":
         cached = path.with_suffix(".txt")
+        if "sources" in path.resolve().parts:  # never write into the user's sources/; import the file instead
+            return path, _pdf_to_paragraphs(path)
         if not cached.exists():
             cached.write_text("\n".join(_pdf_to_paragraphs(path)) + "\n", encoding="utf-8")
         path = cached
@@ -282,6 +288,37 @@ def cmd_fetch(a):
         print(f"== document links and links matching the keywords ({len(links)}{', first 25 shown' if len(links) > 25 else ''}); fetch one to read it:")
         for text, href in links[:25]:
             print(f"  {text[:80] or '(no text)'} -> {href}")
+
+
+def cmd_import(a):
+    src = Path(a.file).resolve()
+    if not src.is_file():
+        sys.exit(f"{a.file}: no such file")
+    folder = Path(a.folder).resolve()
+    files = folder / "evidence" / "files"
+    files.mkdir(parents=True, exist_ok=True)
+    name = "user-" + re.sub(r"[^a-zA-Z0-9]+", "-", re.sub(r"^user-", "", a.name)).strip("-")
+    txt, meta = files / f"{name}.txt", files / f"{name}.json"
+    if txt.exists() and not a.force:
+        sys.exit(f"{txt.relative_to(folder)} exists; pick another --name (or --force)")
+    raw = src.read_bytes()
+    paras, title, kind = to_paragraphs(raw, "text/html" if src.suffix.lower() in (".html", ".htm") else "", files)
+    txt.write_text("\n".join(paras) + "\n", encoding="utf-8")
+    info = {"url": os.path.relpath(src, folder), "original": str(src), "fetched": datetime.date.today().isoformat(),
+            "content_type": "", "kind": kind, "title": title, "sha256": hashlib.sha256(raw).hexdigest(),
+            "bytes": len(raw), "paragraphs": len(paras), "user_supplied": True}
+    meta.write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"imported: {txt.relative_to(folder)}  [{kind}, {len(paras)} paragraphs] from {info['url']}")
+    if title:
+        print(f"title: {title}")
+    if sum(map(len, paras)) < 1500:
+        print("note: very little text; a scanned PDF needs OCR, a saved web page may need its live URL fetched with --render.")
+
+
+def work_dir(folder):
+    """The agent/ folder, given it or the project folder that holds it."""
+    p = Path(folder)
+    return p / "agent" if (p / "agent").is_dir() else p
 
 
 def cmd_sources(a):
@@ -624,6 +661,12 @@ def main():
     p.add_argument("--max", type=int, default=8, help="max hits per keyword (default 8)")
     p.add_argument("--render", action="store_true", help="load the page in headless Chromium (JavaScript sites)")
     p.set_defaults(fn=cmd_fetch)
+    p = sub.add_parser("import", help="extract the text of a user-supplied file into evidence/files/user-<name>.txt")
+    p.add_argument("folder")
+    p.add_argument("file", help="the original, normally in the project's sources/ folder")
+    p.add_argument("--name", required=True, help="short slug for the cached text (user- is prefixed)")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(fn=cmd_import)
     p = sub.add_parser("sources", help="list sources already cached in evidence/files/")
     p.add_argument("folder")
     p.add_argument("keywords", nargs="*")
@@ -676,6 +719,8 @@ def main():
     p.set_defaults(fn=cmd_verify)
 
     a = ap.parse_args()
+    if getattr(a, "folder", None):
+        a.folder = str(work_dir(a.folder))
     a.fn(a)
 
 

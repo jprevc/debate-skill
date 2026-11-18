@@ -56,7 +56,7 @@
 
 ## 7. Evidence
 
-The full index is in [ledger.md](ledger.md). Every Evidence ID in this Report links to its file.
+The full index is in [ledger.md](../agent/ledger.md). Every Evidence ID in this Report links to its file.
 
 ## 8. Methodology: how this Report was made
 

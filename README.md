@@ -18,7 +18,7 @@ The main agent frames the Motion with you, then runs fresh subagents Stage by St
 
 The main agent stops after each Stage and asks before starting the next. When an Advocate needs a document only you can get, it raises an Evidence Request.
 
-**Output:** `report.md` and a self-contained `report.html` with charts, info pop-ups and every Evidence ID clickable to its quote, translation and Audit verdict. On request, a translated Report (`report-<lang>.md/.html`).
+**Output:** `outputs/report.md` and a self-contained `outputs/report.html` with charts, info pop-ups and every Evidence ID clickable to its quote, translation and Audit verdict. On request, a translated Report (`report-<lang>.md/.html`).
 
 ## Requirements
 
@@ -44,13 +44,21 @@ ln -s "$PWD/skills/debate" ~/.claude/skills/debate
 
 ## Use
 
-From the folder that holds your source documents:
+From a folder for this debate (empty, or holding your source documents):
 
 ```
 /debate Should voters approve <act> at the referendum on <date>?
 ```
 
-The debate folder is created there as `<YYYY-MM-DD>-<motion-slug>/`.
+The folder is laid out as:
+
+```
+sources/   your own files, never changed by the agents
+agent/     the debate record: state, cases, audits, Evidence and cached sources
+outputs/   report.md, report.html (and report-<lang>.* for a translation)
+```
+
+If the folder already holds other things, the skill creates `<motion-slug>/` in it instead.
 
 ## Repository layout
 

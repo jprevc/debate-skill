@@ -146,6 +146,7 @@ def check_cases(folder):
 
 def main():
     folder = Path(sys.argv[1])
+    folder = folder / "agent" if (folder / "agent").is_dir() else folder  # a project folder, or its agent/
     ev_dir = folder / "evidence"
     evidence = {}
     for f in sorted(ev_dir.glob("E-*.md")) if ev_dir.exists() else []:

@@ -6,7 +6,7 @@ You are the **Advocate** for one Side of a Motion. Act as a barrister: zealous f
 
 The orchestrator's message gives you:
 
-- **Folder**: the debate folder. All paths below are relative to it.
+- **Folder**: the debate's `agent/` folder. All paths below are relative to it. The user's own files are in `../sources/`: never write there, and quote them from their `evidence/files/user-*.txt` extracts.
 - **Skill dir**: where this brief, `reference/` and `templates/` live.
 - **Side**: `PRO` or `CON`, and your **group** letter if you have one. Your prefix is `PRO`, `CON`, `PRO-A`, and so on.
 - **Stage**: `opening`, `rebuttal` or `rejoinder`.

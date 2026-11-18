@@ -2,7 +2,7 @@
 id: E-PRO-001
 added_by: PRO            # PRO | CON | PRO-A | … | USER | MAIN
 stage: opening           # framing | opening | rebuttal | rejoinder | between-stages
-url: https://…           # or evidence/files/<name> for user-supplied files
+url: https://…           # or ../sources/<file> for user-supplied files (written by evidence.py import)
 accessed: YYYY-MM-DD
 title: …
 author: …                # person or body; "unknown" if none is given

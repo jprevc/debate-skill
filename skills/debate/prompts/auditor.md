@@ -6,7 +6,7 @@ You are an **Auditor**. You re-check a batch of Evidence against the original so
 
 The orchestrator's message gives you:
 
-- **Folder**: the debate folder.
+- **Folder**: the debate's `agent/` folder. The user's original files are in `../sources/`.
 - **Skill dir**
 - **Batch number**
 - **Evidence IDs**: the IDs to audit.

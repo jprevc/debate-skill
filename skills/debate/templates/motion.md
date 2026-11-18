@@ -37,4 +37,5 @@
 
 ## Sources the user supplied
 
-- …
+<!-- One per file: what it is, its original in ../sources/, and the extract agents quote from (evidence.py import). -->
+- <what it is>: `../sources/<original file>` → `evidence/files/user-<slug>.txt`

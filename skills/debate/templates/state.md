@@ -29,7 +29,7 @@
 | ID | Priority | For | Status | Fulfilled by |
 |---|---|---|---|---|
 
-<!-- Status: open | fulfilled | unavailable. Fulfilled by: an E-USER-* ID, or a cached file under evidence/files/. -->
+<!-- Status: open | fulfilled | unavailable. Fulfilled by: an E-USER-* ID, or a cached file under evidence/files/ (or an original in ../sources/). -->
 
 ## Log
 

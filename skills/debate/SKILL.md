@@ -5,30 +5,41 @@ description: Debate a yes/no Motion between Pro and Con Advocate subagents, with
 
 # Debate
 
-You are the **orchestrator**. You frame the Motion with the user, dispatch fresh subagents Stage by Stage, and keep the record in the debate folder. You don't argue the Motion or write the Report. You are the only participant who talks to the user, so you are the one who could leak the user's leanings. Keep the subagents **blind** to them: what you pass on is the scope and the record, nothing more.
+You are the **orchestrator**. You frame the Motion with the user, dispatch fresh subagents Stage by Stage, and keep the record in the project folder. You don't argue the Motion or write the Report. You are the only participant who talks to the user, so you are the one who could leak the user's leanings. Keep the subagents **blind** to them: what you pass on is the scope and the record, nothing more.
 
 `<skill dir>` is this skill's base directory. The shared rules for Evidence, Claims, responses and Evidence Requests are in `<skill dir>/reference/evidence.md`. Read that file before Framing.
 
-## Debate folder
+## Project folder
 
-The debate folder is `<root>/<YYYY-MM-DD>-<motion-slug>/`.
-- `<root>` is the directory the user invoked the skill from, or a folder they name. It is never `<skill dir>`.
-- `state.md` is the single source of truth for progress. Every Stage reads its inputs from files and writes its outputs to files, so a fresh session can resume from `state.md` alone.
+One debate per project folder, which keeps what the user supplied apart from what the agents made:
 
 ```
-state.md  motion.md  ledger.md  report.md  report.html  figures.json
-evidence/E-*.md  evidence/files/
-notes-<prefix>.md                     one per Advocate (prefix: pro, con, pro-a, …)
-1-opening-<prefix>.md  2-rebuttal-<prefix>.md  4-rejoinder-<prefix>.md
-3-audit-batch-<N>.md  3-audit.md
-report-<lang>.md  report-<lang>.html  figures-<lang>.json  motion-<lang>.md   only for a Translated Report
+<project>/
+  sources/    the user's own files, exactly as they gave them; agents never write here
+  agent/      the debate record, everything the agents made
+  outputs/    report.md  report.html  (report-<lang>.md  report-<lang>.html for a Translated Report)
+```
+
+- `<project>` is the folder the user names, or the directory they invoked the skill from when it is empty or holds only their documents for this Motion. Otherwise create `<project>` there as `<motion-slug>/`, and tell the user. It is never `<skill dir>`. Folder names carry no date: the date is in `state.md`.
+- **`<folder>`** in this skill and in every dispatch is the absolute path of `agent/`. The scripts also accept `<project>`.
+- `agent/state.md` is the single source of truth for progress. Every Stage reads its inputs from files and writes its outputs to files, so a fresh session can resume from `state.md` alone.
+
+```
+agent/
+  state.md  motion.md  ledger.md  figures.json
+  evidence/E-*.md
+  evidence/files/          text the agents quote from: user-*.txt (extracts of sources/), fetched documents, web/
+  notes-<prefix>.md                     one per Advocate (prefix: pro, con, pro-a, …)
+  1-opening-<prefix>.md  2-rebuttal-<prefix>.md  4-rejoinder-<prefix>.md
+  3-audit-batch-<N>.md  3-audit.md
+  figures-<lang>.json  motion-<lang>.md   only for a Translated Report
 ```
 
 ## Start or resume
 
 The user may give a Motion, a link or a question. They may add `quick`, which skips the Rejoinder, and a folder.
 
-- If the given folder, or the current directory, contains `state.md`, **resume**. Read `state.md` and find the first Stage that isn't `done` or `skipped`. Tell the user which Stage you are resuming.
+- If the given folder or the current directory contains `agent/state.md`, or is `agent/` itself, **resume**. An older debate folder has `state.md` at its top, with no `agent/`: resume it in place, and the scripts write its Report there too. Read `state.md` and find the first Stage that isn't `done` or `skipped`. Tell the user which Stage you are resuming.
   - `outputs-done`: every dispatch finished, so run only Between Stages for it.
   - `running`: rerun only the dispatches whose output is incomplete. An Advocate's case file is complete when it has its final `## Evidence Requests` section, and an Audit batch is complete when its batch file exists. Keep the complete outputs.
   - `pending`: run the Stage.
@@ -45,12 +56,12 @@ The user may give a Motion, a link or a question. They may add `quick`, which sk
    - arguments they have heard and want addressed
 
    Questions about which way they lean belong to no Stage. If the user volunteers their leanings, keep them out of every file and every dispatch.
-4. **Primary Text.** If the Motion concerns a specific document, cache it with `scripts/evidence.py fetch`, or copy a file the user gave you into `evidence/files/`. Then record its operative provisions as `E-PRIMARY-001` with `evidence.py quote`. Advocates search the cached text themselves. If you can't fetch it, ask the user for it.
+4. **User files and Primary Text.** Put every file the user gives you in `sources/`, unchanged: if their files are loose in `<project>`, move them in and say so. Never edit, rename or copy a file inside `sources/`. Extract each one's text with `scripts/evidence.py import <folder> sources/<file> --name <short-slug>`, which writes `evidence/files/user-<slug>.txt` and records the original as the source's url. List each original with its extract under "Sources the user supplied" in `motion.md`. If the Motion concerns a specific document, cache it with `scripts/evidence.py fetch`, or import the user's copy. Then record its operative provisions as `E-PRIMARY-001` with `evidence.py quote`. Advocates search the cached text themselves. If you can't fetch it, ask the user for it.
 5. **Dimensions.** Propose them: the document's provisions, or cross-cutting themes such as cost, legality or health effects. Let the user confirm or edit the list.
 6. **Write the folder.**
    - `motion.md`, from `templates/motion.md`. Include Source Tier examples for this domain. Put each kind of document in exactly one tier, and cover every kind the debate is likely to quote: the government and its ministries, the proposers' own bill and memorandum, courts including dissenting opinions. The Report language is English unless the user asks for another. It is the language of every case file and the Report; quotes stay in their source's language.
    - `state.md`, from `templates/state.md`. In quick mode, mark Rejoinder and Rejoinder Audit `skipped`.
-   - `evidence/`
+   - `agent/evidence/`, and the empty `outputs/`
 7. **Groups.** With more than about six Dimensions, split them into groups (A, B, …) of related Dimensions. Each group gets its own Advocate per Side. Record the groups in `state.md`.
 8. Mark Framing `done`, then tell the user the debate is starting and roughly how many subagent runs it will take.
 
@@ -63,7 +74,7 @@ The user may give a Motion, a link or a question. They may add `quick`, which sk
 
 ```
 Read <skill dir>/prompts/advocate.md and follow it.
-Folder: <absolute debate folder>
+Folder: <absolute path of agent/>
 Skill dir: <skill dir>
 Side: PRO   (group: A, if any)
 Stage: rebuttal
@@ -111,12 +122,12 @@ After every Stage, in this order:
 3. **Evidence Requests.**
    - Collect them from the Stage outputs and add them to `state.md` as `open`.
    - **Triage** every open request before asking the user. Advocates of one Stage work in parallel, and each sees only its own fetches, so many requests can be met without the user:
-     - *Already in the record.* Search `ledger.md` and `evidence/files/` for the requested document. Another Advocate may have fetched it already.
+     - *Already in the record.* Search `ledger.md`, `evidence/files/` and `../sources/` for the requested document. Another Advocate may have fetched it already.
      - *Tool failure.* If `Tried` shows a certificate, DNS, timeout or JavaScript failure, retry those URLs with `scripts/evidence.py fetch`, with `--render` for JavaScript. Check that the domain is the institution's real one, and use `reference/sites.md` for the site's direct document links.
      - *Duplicates.* Merge requests from different Advocates for the same document into one item.
      - For either, mark the request `fulfilled` with the cached file's path under `evidence/files/` in "Fulfilled by". The requesting Advocate records Evidence from it in its next Stage. Fetch only the requested document, and quote nothing from it yourself.
-   - Ask the user for the rest in one message, critical ones first. For each one give: what it is, which Claims it is for, the `Where` URLs and identifiers, the `Effort`, and how to hand it over (save the file into `evidence/files/`, give its path, or paste the text). Put the requests whose `Effort` can't be met before the decision date last, and say so.
-   - Save what the user supplies as `E-USER-NNN`, putting files in `evidence/files/`, and mark the request `fulfilled` with that ID.
+   - Ask the user for the rest in one message, critical ones first. For each one give: what it is, which Claims it is for, the `Where` URLs and identifiers, the `Effort`, and how to hand it over (save the file into `sources/`, give its path, or paste the text). Put the requests whose `Effort` can't be met before the decision date last, and say so.
+   - Put what the user supplies in `sources/` (pasted text as a `.txt` file there), `import` it, save it as `E-USER-NNN`, and mark the request `fulfilled` with that ID.
    - If the user can't get something, mark it `unavailable`.
    - The debate goes on either way: pending Claims stay pending, and the Report shows them as unsupported.
 4. **State.** Mark the Stage `done`, and log anything you reran or skipped.
@@ -125,7 +136,7 @@ After every Stage, in this order:
 ## Finish
 
 When Judgment is done, give the user:
-- the paths to `report.html` (the Report with charts; it opens offline in a browser) and `report.md`
+- the paths to `outputs/report.html` (the Report with charts; it opens offline in a browser) and `outputs/report.md`
 - the Judge's three-line summary of the main cruxes
 - any Evidence Requests still `open`
 
@@ -133,11 +144,11 @@ If the user later supplies Evidence for one of those, add it and rerun from Stag
 
 ## Translated Report
 
-If the user asks for the Report in another language, dispatch one fresh `general-purpose` agent to translate `report.md` into `report-<lang>.md` (for example `report-sl.md`), and `figures.json` into `figures-<lang>.json`. Also write `motion-<lang>.md` yourself: the Motion line in bold, and the Source Tier lines (`- A: …`) translated. The translation must mirror the original:
+If the user asks for the Report in another language, dispatch one fresh `general-purpose` agent to translate `outputs/report.md` into `outputs/report-<lang>.md` (for example `report-sl.md`), and `agent/figures.json` into `agent/figures-<lang>.json`. Also write `agent/motion-<lang>.md` yourself: the Motion line in bold, and the Source Tier lines (`- A: …`) translated. The translation must mirror the original:
 
 - the same sections, subsections, bullets and Evidence links, in the same order;
 - the domain's own terms, taken from the Evidence quotes (the act's and institutions' names as the sources write them), not literal translations;
 - the Side names of that language's interface (Slovenian: Za / Proti); Claim and Evidence IDs stay as they are, because they are file links;
 - the `· Status:` markers and crux labels in the original language, or in the target language where `report_html.py` lists them.
 
-Then run `uv run --script <skill dir>/scripts/report_html.py <folder> --lang <lang>`, which writes `report-<lang>.html`. From then on, make every later fix to the Report in both versions, and rebuild both.
+Then run `uv run --script <skill dir>/scripts/report_html.py <folder> --lang <lang>`, which writes `outputs/report-<lang>.html`. From then on, make every later fix to the Report in both versions, and rebuild both.

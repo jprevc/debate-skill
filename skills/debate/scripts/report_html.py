@@ -5,10 +5,14 @@
 # ///
 """Build report.html from a finished debate folder.
 
-Usage: uv run --script report_html.py <debate-folder> [--lang <code>]
+Usage: uv run --script report_html.py <project-folder> [--lang <code>]
 
-Reads report.md, figures.json (optional), motion.md, the case files and evidence/E-*.md,
-and writes one self-contained report.html: the Report text with every Evidence ID opening
+The project folder holds sources/ (the user's files), agent/ (the debate record) and
+outputs/ (the Reports); agent/ itself is accepted too. A folder with no agent/ is read as
+an older, flat debate folder and the Report is written into it.
+
+Reads outputs/report.md, then agent/figures.json (optional), agent/motion.md, the case
+files and agent/evidence/E-*.md, and writes one self-contained outputs/report.html: the Report text with every Evidence ID opening
 its quote, translation and Audit verdict; charts of the record (Evidence quality and Audit
 results per Side, crux status per Dimension), each with an info pop-up that explains it;
 and the Judge's figures from figures.json.
@@ -31,7 +35,9 @@ import html
 import json
 import math
 import re
+import os
 import sys
+import urllib.parse
 from pathlib import Path
 
 import markdown
@@ -44,6 +50,7 @@ TIERS = ("A", "B", "C", "D")
 AUDIT = ("passed", "partial", "failed", "not audited")
 STATUS = ("settled", "leaning Pro", "leaning Con", "unsettled")
 problems = []
+EVDIR = "evidence"  # the Evidence folder as seen from the page; set in main()
 
 
 # ---------- interface language ----------
@@ -642,7 +649,7 @@ def figure_html(f, ev):
     body = bar_chart(f) if f["type"] == "bar" else line_chart(f)
     body = re.sub(r"(<svg.*?</svg>)", r'<div class="cw">\1</div>', body, count=1, flags=re.S)
     ids = sorted(fig_ids(f))
-    src = ", ".join(f'<a href="evidence/{i}.md" data-ev="{i}">{i}</a>' + (f' <span class="flag">{T(ev[i]["audit"])}</span>' if i in ev and ev[i]["audit"] != "passed" else "") for i in ids)
+    src = ", ".join(f'<a href="{EVDIR}/{i}.md" data-ev="{i}">{i}</a>' + (f' <span class="flag">{T(ev[i]["audit"])}</span>' if i in ev and ev[i]["audit"] != "passed" else "") for i in ids)
     unit = f' <span class="unit">{esc(f["unit"])}</span>' if f.get("unit") else ""
     note = f'<p class="note">{esc(f["note"])}</p>' if f.get("note") else ""
     return (f'<figure class="fig" id="fig-{esc(f["id"])}"><figcaption><b>{esc(f["title"])}</b>{unit}'
@@ -730,7 +737,7 @@ function openEv(id){const e=EV[id];if(!e)return false;
  const t=e.translation?`<div class="lang">${L.translation}</div><blockquote>${esc(e.translation).replace(/\\n/g,'<br>')}</blockquote>`:'';
  const row=(k,v)=>v?`<dt>${k}</dt><dd>${esc(v)}</dd>`:'';
  dlg.innerHTML=`<button onclick="this.closest('dialog').close()">${L.close}</button><h4>${esc(id)}: ${esc(e.title)}</h4>
- <div class="m">${esc(e.publisher)}${e.published?' · '+esc(e.published):''}${e.url?` · <a href="${esc(e.url)}" target="_blank" rel="noopener">${L.source}</a>`:''} · <a href="evidence/${esc(id)}.md">${L.file}</a></div>${q}${t}
+ <div class="m">${esc(e.publisher)}${e.published?' · '+esc(e.published):''}${e.url?` · <a href="${esc(e.url)}" target="_blank" rel="noopener">${L.source}</a>`:''} · <a href="${esc(L.evdir)}/${esc(id)}.md">${L.file}</a></div>${q}${t}
  <dl>${row(L.audit,L.results[e.audit]||e.audit)}${row(L.tier,e.tier)}${row(L.found,e.found)}${row(L.supports,e.supports)}${row(L.cherry,e.cherry)}${row(L.funder,e.funder)}${row(L.notes,e.notes)}</dl>`;
  dlg.showModal();return true;}
 document.addEventListener('click',e=>{const a=e.target.closest('[data-ev]');if(!a)return;const id=a.dataset.ev.split(',')[0].trim();
@@ -741,8 +748,8 @@ dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close();});
 
 
 def link_ids(md):
-    # bare IDs become links; already-linked IDs ([E-…](evidence/E-….md)) are left alone
-    return re.sub(rf"(?<![\[/\w-])({EID})(?![\]\w-])", r"[\1](evidence/\1.md)", md)
+    # bare IDs become links; already-linked IDs ([E-…](../agent/evidence/E-….md)) are left alone
+    return re.sub(rf"(?<![\[/\w-])({EID})(?![\]\w-])", lambda m: f"[{m.group(1)}]({EVDIR}/{m.group(1)}.md)", md)
 
 
 def render_body(report_md, figures_by_dim):
@@ -753,7 +760,8 @@ def render_body(report_md, figures_by_dim):
     md = re.sub(r"^(?![ \t]*[-*] |[ \t]*\d+\. )(.+)\n(?=[ \t]*(?:[-*]|\d+\.) )", r"\1\n\n", md, flags=re.M)  # lists need a blank line before them
     md = link_ids(md)
     body = markdown.markdown(md, extensions=["tables", "sane_lists"])
-    body = re.sub(rf'<a href="evidence/({EID})\.md">', r'<a class="ev" href="evidence/\1.md" data-ev="\1">', body)
+    # Evidence links, however the Report wrote the path (evidence/… or ../agent/evidence/…), point at EVDIR
+    body = re.sub(rf'<a href="(?:[\w.%-]+/)*evidence/({EID})\.md">', lambda m: f'<a class="ev" href="{EVDIR}/{m.group(1)}.md" data-ev="{m.group(1)}">', body)
     body = re.sub(STATUS_MARK, lambda m: f'<span class="status">{esc(T(STATUS_WORDS[m.group(1)]))}</span>', body)
     body = re.sub(rf"<strong>({LABEL_RE})</strong>(?: \([^)]*\))?", lambda m: f"<strong>{esc(T('label_' + LABEL_WORDS[m.group(1)]))}</strong>", body)
 
@@ -766,23 +774,34 @@ def render_body(report_md, figures_by_dim):
     return body
 
 
+def layout(p):
+    """(agent dir, outputs dir) for a project folder, its agent/ folder, or an older flat debate folder."""
+    p = p.resolve()
+    if (p / "agent").is_dir():
+        return p / "agent", p / "outputs"
+    if p.name == "agent":
+        return p, p.parent / "outputs"
+    return p, p
+
+
 def main():
-    global UI
+    global UI, EVDIR
     args = sys.argv[1:]
     lang = None
     if "--lang" in args:
         i = args.index("--lang")
         lang = args[i + 1].lower()
         del args[i:i + 2]
-    folder = Path(args[0])
+    folder, outdir = layout(Path(args[0]))
+    EVDIR = urllib.parse.quote(os.path.relpath(folder / "evidence", outdir))
     sfx = f"-{lang}" if lang else ""
-    pick = lambda name, ext: folder / f"{name}{sfx}{ext}" if (folder / f"{name}{sfx}{ext}").exists() else folder / f"{name}{ext}"  # noqa: E731
-    report_p = pick("report", ".md")
+    pick = lambda name, ext, d=folder: d / f"{name}{sfx}{ext}" if (d / f"{name}{sfx}{ext}").exists() else d / f"{name}{ext}"  # noqa: E731
+    report_p = pick("report", ".md", outdir)
     if lang and report_p.name == "report.md":
-        print(f"report-{lang}.md missing in {folder}")
+        print(f"report-{lang}.md missing in {outdir}")
         return
     if not report_p.exists():
-        print(f"report.md missing in {folder}")
+        print(f"report.md missing in {outdir}")
         return
     report = report_p.read_text(encoding="utf-8")
     motion, domain_tiers, report_lang = read_motion(folder, lang)
@@ -792,6 +811,9 @@ def main():
         code = "en"
     UI = STRINGS[code]
     ev = load_evidence(folder)
+    for e in ev.values():  # relative links are written from agent/; the page lives in outputs/
+        if e["url"] and not re.match(r"[a-z][a-z0-9+.-]*:", e["url"], re.I):
+            e["url"] = urllib.parse.quote(os.path.relpath(folder / e["url"], outdir))
     claims, concessions = load_cases(folder)
     cruxes = crux_map(report)
 
@@ -825,7 +847,7 @@ def main():
     heading = re.sub(r"^(?:Debate Report|Poročilo o razpravi): ", "", title)
     mline = f'<p class="motion"><span>{esc(T("motion_label"))}</span> {esc(motion)}</p>' if motion else ""
     method = '<a href="#methodology">' + esc(T("nav_method")) + "</a>" if 'id="methodology"' in body else ""
-    ui = dict(T("dlg"), results={k: T(k) for k in AUDIT})
+    ui = dict(T("dlg"), results={k: T(k) for k in AUDIT}, evdir=EVDIR)
     page = f"""<!doctype html><html lang="{UI['lang']}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(heading[:100])}</title><style>{CSS}</style></head><body><main>
 <header class="top"><div class="kicker">{esc(T("kicker"))}</div><h1>{esc(heading)}</h1>{mline}
@@ -838,7 +860,8 @@ def main():
 <script type="application/json" id="evdata">{json.dumps(evdata, ensure_ascii=False).replace("</", "<\\/")}</script>
 <script type="application/json" id="uidata">{json.dumps(ui, ensure_ascii=False).replace("</", "<\\/")}</script>
 <script>{JS}</script></body></html>"""
-    out = folder / f"report{sfx}.html"
+    outdir.mkdir(exist_ok=True)
+    out = outdir / f"report{sfx}.html"
     out.write_text(page, encoding="utf-8")
     for p in problems:
         print(p)

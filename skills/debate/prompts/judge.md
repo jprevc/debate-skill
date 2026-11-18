@@ -31,15 +31,15 @@ The record in the folder is your whole world. The Advocates' notes files are the
 
 ## Output
 
-1. Write `report.md` from `templates/report.md`, in the Report language given in `motion.md`.
+1. Write `../outputs/report.md` (the `outputs/` folder beside `agent/`) from `templates/report.md`, in the Report language given in `motion.md`.
    - The title is a neutral question about the decision, such as "Referendum on Act X, 6 December 2026: should the act enter into force?". Never use the Motion's own wording ("voters should vote FOR …"): as a title it reads as an instruction, or as the debate's verdict. Case files from earlier Stages may be in another language: write the Report in the Report language anyway. Where you quote Evidence whose source is in another language, give the original and a translation.
-   - Every Evidence ID you mention is a relative link, `[E-PRO-003](evidence/E-PRO-003.md)`.
+   - Every Evidence ID you mention is a link relative to `outputs/`, `[E-PRO-003](../agent/evidence/E-PRO-003.md)`; so is the ledger, `../agent/ledger.md`.
    - Fill the Strength table with counts from the record.
    - Write the imbalance paragraph plainly.
    - Build the Cheat Sheets from the strongest exchanges in the debate. Each "You answer" cites audited Evidence that did not fail.
    - Keep the bullet format of Section 2 exactly, including `· Status: …` on every Factual Crux. `report_html.py` reads it. In a Slovenian Report you may write the markers in Slovenian instead: `· Stanje: razrešeno | v prid strani Za | v prid strani Proti | nerazrešeno`, and the labels `**Ugotovljeno**`, `**Dejstvena ključna vprašanja**`, `**Vrednostna ključna vprašanja**`.
    - End with the Methodology section from `templates/methodology.md`. Fill its placeholders from `motion.md` and `state.md`, and write it in the Report language.
-2. Write `figures.json`: the charts that let a reader see what the Motion changes. Pick the 3–8 numbers the cruxes turn on, such as competing cost estimates, a threshold or rate before and after, or who gains how much. Every value comes from audited Evidence that did not fail. A value you compute from Evidence (a schedule from statutory rates, a sum) cites that Evidence and says how in `note`. Charts show effects and estimates, never a score of which Side is winning.
+2. Write `figures.json` (in the Folder): the charts that let a reader see what the Motion changes. Pick the 3–8 numbers the cruxes turn on, such as competing cost estimates, a threshold or rate before and after, or who gains how much. Every value comes from audited Evidence that did not fail. A value you compute from Evidence (a schedule from statutory rates, a sum) cites that Evidence and says how in `note`. Charts show effects and estimates, never a score of which Side is winning.
 
    ```json
    {"figures": [
@@ -59,7 +59,7 @@ The record in the folder is your whole world. The Advocates' notes files are the
    - Every rate, threshold or amount in the caption is in the figure's data, in its note, or in the quote of its Evidence. If it comes from Evidence that no series cites, list that Evidence in `"caption_evidence": ["E-…"]`.
    - Read the caption against the plotted values. A sentence such as "above EUR 60,000 it recognises 70%" has to match what the lines show at that point.
    - Lines being compared cover the same range of the x-axis. If a source gives only one example point, extend the line by the rule it states and say so in `note`.
-3. Run `uv run --script <skill dir>/scripts/report_html.py <folder>`. It writes `report.html`, with charts of the record and your figures, and prints each problem it finds: a missing `Status`; a figure citing Evidence that is missing, failed the Audit or was never audited; or a `CAPTION` number that neither the data, the note nor the cited Evidence contains. Fix them and rerun until it prints none. If a `CAPTION` number truly has no source in the record, take it out of the caption.
+3. Run `uv run --script <skill dir>/scripts/report_html.py <folder>`. It writes `outputs/report.html`, with charts of the record and your figures, and prints each problem it finds: a missing `Status`; a figure citing Evidence that is missing, failed the Audit or was never audited; or a `CAPTION` number that neither the data, the note nor the cited Evidence contains. Fix them and rerun until it prints none. If a `CAPTION` number truly has no source in the record, take it out of the caption.
 4. Reply to the orchestrator with the Report path and a three-line summary of the main cruxes.
 
 ## Done means
