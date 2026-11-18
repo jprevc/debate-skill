@@ -112,10 +112,10 @@ Text.
 
 def test_lead_paragraph_is_marked_and_sits_above_the_dimensions_figures():
     body = report_html.render_body(REPORT_WITH_LEAD, {"Tax bands": [FIG]})
-    h3 = body.index('<h3 id="dim-tax-bands">')
+    h3 = body.index('<section class="dim" id="dim-tax-bands"><h3>')
     lead = body.index('<p class="lede">The act replaces')
     fig = body.index(FIG)
-    settled = body.index("<strong>Settled</strong>")
+    settled = body.index('<strong class="blabel">Settled</strong>')
     assert h3 < lead < fig < settled
 
 
@@ -125,7 +125,7 @@ REPORT_WITHOUT_LEAD = REPORT_WITH_LEAD.replace(
 
 def test_older_report_without_lead_keeps_figures_directly_under_the_heading():
     body = report_html.render_body(REPORT_WITHOUT_LEAD, {"Tax bands": [FIG]})
-    assert f'<h3 id="dim-tax-bands">Tax bands</h3>{FIG}' in body
+    assert f'<span class="dnum">2.1</span> Tax bands</h3>{FIG}' in body
     assert 'class="lede"' not in body
 
 
@@ -143,7 +143,7 @@ def test_lead_paragraph_without_a_blank_line_before_settled_still_stays_apart_fr
     report = REPORT_WITH_LEAD.replace("E-PRIMARY-001.md).\n\n**Settled**", "E-PRIMARY-001.md).\n**Settled**")
     body = report_html.render_body(report, {"Tax bands": [FIG]})
     lead_end = body.index("</p>", body.index('<p class="lede">'))
-    assert lead_end < body.index(FIG) < body.index("<strong>Settled</strong>")
+    assert lead_end < body.index(FIG) < body.index('<strong class="blabel">Settled</strong>')
 
 
 def test_a_slovenian_label_is_never_taken_for_a_lead_paragraph():

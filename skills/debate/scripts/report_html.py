@@ -72,7 +72,7 @@ STRINGS = {
         "audit_title": "Audit result", "audit_sub": "Quote found verbatim, in context, and supports the Claim",
         "items": "pieces of Evidence", "of": "of", "table_view": "Table view",
         "claims_word": "Claims", "concessions": "Concessions", "pending": "still pending Evidence",
-        "crux_title": "Where each Dimension stands",
+        "crux_title": "Where each Dimension stands", "dim_jump": "Dimensions",
         "crux_sub": "Settled facts, open questions by status, and what depends on your values: the questions only your priorities can answer",
         "crux_cols": ("Dimension", "Settled", "Open questions", "Depends on your values"), "none": "none",
         "no_figure": "no figure", "evidence_col": " (Evidence)",
@@ -130,7 +130,7 @@ STRINGS = {
         "audit_title": "Rezultat preverjanja", "audit_sub": "Navedek je bil najden dobesedno, v kontekstu, in podpira trditev",
         "items": "dokazov", "of": "od", "table_view": "Prikaz v tabeli",
         "claims_word": "trditev", "concessions": "priznanj", "pending": "trditev še čaka na dokaze",
-        "crux_title": "Stanje po področjih",
+        "crux_title": "Stanje po področjih", "dim_jump": "Področja",
         "crux_sub": "Razrešena dejstva, odprta vprašanja po stanju in kar je odvisno od vaših vrednot: vprašanja, na katera lahko odgovorijo le vaše prioritete",
         "crux_cols": ("Področje", "Razrešeno", "Odprta vprašanja", "Odvisno od vaših vrednot"), "none": "jih ni",
         "no_figure": "ni podatka", "evidence_col": " (dokazi)",
@@ -768,6 +768,17 @@ nav.toc{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;margin:12px 0 0}
 @media print{nav.toc,#tip,dialog{display:none!important}.panel[hidden]{display:block!important}}  /* !important: beats the [hidden] rule and the tip's inline display */
 a{color:var(--link)}h2{font-size:22px;margin:48px 0 8px}h3{font-size:18px;margin:36px 0 8px;scroll-margin-top:16px}
 .lede{color:var(--ink2);margin-top:0}
+/* section 2: a jump list, then one card per Dimension. The bar is neutral ink, never a Side's colour (the Report is verdict-free) */
+.dimjump ol{list-style:none;margin:12px 0 8px;padding:0;display:flex;flex-wrap:wrap;gap:6px 8px;font-size:14px;line-height:1.4}
+.dimjump a{display:inline-block;max-width:100%;padding:4px 10px;border:1px solid var(--ring);border-radius:14px;background:var(--surface);color:var(--ink);text-decoration:none}
+.dimjump a:hover{border-color:var(--ink2)}.dimjump a:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+.dnum{color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums;margin-right:2px}
+section.dim{background:var(--surface);border:1px solid var(--ring);border-top:4px solid var(--ink2);border-radius:10px;padding:2px 20px 8px;margin:24px 0;scroll-margin-top:16px}
+section.dim h3{font-size:24px;line-height:1.3;margin:16px 0 8px}section.dim figure{background:var(--page)}
+section.dim p:has(>.blabel){margin:20px 0 4px}section.dim p:has(>.blabel:only-child)+ul{margin-top:0}
+.blabel{display:block;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+@media (max-width:560px){section.dim{padding:2px 14px 6px}section.dim h3{font-size:21px}}
+@media print{section.dim h3{break-after:avoid}}
 figure{margin:20px 0;background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:16px 16px 10px}
 figcaption{display:flex;flex-direction:column;gap:2px;margin-bottom:10px}figcaption span{color:var(--ink2);font-size:14px}
 .unit{color:var(--muted);font-size:13px;font-weight:400}
@@ -896,15 +907,30 @@ def render_body(report_md, figures_by_dim):
     # styled as a lede, with the Dimension's figures after it
     sec2 = re.search(r"<h2>2\..*?(?=<h2>|\Z)", body, re.S)
     sec2 = sec2.span() if sec2 else (0, 0)
+    dims = []  # (anchor, number, heading html) of section 2's Dimensions, in order
 
     def h3(m):
         name = html.unescape(m.group(1))
         anchor = "dim-" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
         lead = m.group(2) or ""
-        if sec2[0] <= m.start() < sec2[1]:
-            lead = lead.replace("<p>", '<p class="lede">', 1)
-        return f'<h3 id="{anchor}">{m.group(1)}</h3>' + lead + "".join(figures_by_dim.pop(name, []))
+        figs = "".join(figures_by_dim.pop(name, []))
+        if not sec2[0] <= m.start() < sec2[1]:
+            return f'<h3 id="{anchor}">{m.group(1)}</h3>' + lead + figs
+        # a Dimension: numbered from its section, and opening a card that runs to the next Dimension
+        num = f"2.{len(dims) + 1}"
+        dims.append((anchor, num, m.group(1)))
+        lead = lead.replace("<p>", '<p class="lede">', 1)
+        return f'<section class="dim" id="{anchor}"><h3><span class="dnum">{num}</span> {m.group(1)}</h3>' + lead + figs
     body = re.sub(rf"<h3>(.+?)</h3>(\s*<p>(?!<strong>(?:{LABEL_RE})</strong>).*?</p>)?", h3, body, flags=re.S)
+    if dims:  # close each card where the next one opens, and the last at the end of section 2
+        s = re.search(r'<section class="dim".*?(?=<h2>|\Z)', body, re.S)
+        cards = re.split(r'(?=<section class="dim")', s.group(0))[1:]
+        # inside a card, a block label opening its paragraph is a small label on its own line, so it drops the colon
+        cards = [re.sub(rf"<p><strong>({LABEL_RE})</strong>:\s*", r'<p><strong class="blabel">\1</strong>', c) for c in cards]
+        body = body[:s.start()] + "".join(c + "</section>" for c in cards) + body[s.end():]
+        jump = "".join(f'<li><a href="#{a}"><span class="dnum">{n}</span> {h}</a></li>' for a, n, h in dims)
+        nav = f'<nav class="dimjump" aria-label="{esc(T("dim_jump"))}"><ol>{jump}</ol></nav>'
+        body = re.sub(r"<h2>2\..*?</h2>", lambda m: m.group(0) + nav, body, count=1, flags=re.S)
     body = re.sub(rf"<h2>((?:\d+\. )?{re.escape(T('method_word'))}\b)", r'<h2 id="methodology">\1', body, count=1)
     return body
 
