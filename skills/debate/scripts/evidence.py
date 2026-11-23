@@ -5,6 +5,8 @@ Subcommands (run with -h for options):
   fetch  <folder> <url> [keyword ...]   download page/PDF -> cached text in evidence/files/web/, print keyword hits
                                         (--render: load it in headless Chromium first, for JavaScript sites)
   pxweb  search|meta|fetch ...          statistical tables via the PxWeb API (SiStat by default)
+  data   <folder> <script.py>           run a pinned statistics script (sistat, wbgapi, sdmx1 …) with uv and
+                                        cache its rows as text in evidence/files/data/; verify --live re-runs it
   import <folder> <file> --name <slug>  text of a file the user supplied (in sources/) -> evidence/files/user-<slug>.txt;
                                         the original is never changed, and its path becomes the Evidence url
   sources <folder> [keyword ...]        list sources already cached in evidence/files/, matching the keywords
@@ -466,6 +468,94 @@ def _pxweb(a):
             print(f"… {len(lines) - a.max - 1} more rows; read them with show, or narrow the selection.")
 
 
+# ---------- data scripts (statistics through a Python library: sistat, wbgapi, sdmx1, …) ----------
+
+_DEPS = re.compile(r"^# /// script$(.*?)^# ///$", re.S | re.M)
+
+
+def _script_deps(text):
+    block = _DEPS.search(text)
+    if not block:
+        return None
+    body = "\n".join(ln[2:] if ln.startswith("# ") else ln.lstrip("#") for ln in block.group(1).splitlines())
+    m = re.search(r"dependencies\s*=\s*\[(.*?)\]", body, re.S)
+    return re.findall(r"[\"']([^\"']+)[\"']", m.group(1)) if m else []
+
+
+def _run_data_script(script):
+    """Run a PEP 723 script with uv; its last stdout line is {"title", "url", "rows": [{col: value}, …]}."""
+    r = subprocess.run(["uv", "run", "--quiet", "--script", str(script)], capture_output=True, text=True, timeout=900)
+    if r.returncode != 0:
+        raise RuntimeError(f"script failed: {(r.stderr or r.stdout).strip()[-600:]}")
+    last = next((ln for ln in reversed(r.stdout.splitlines()) if ln.strip()), "")
+    try:
+        out = json.loads(last)
+    except json.JSONDecodeError:
+        raise RuntimeError("the script's last line of output is not JSON: end it with "
+                           "print(json.dumps({'title': …, 'url': …, 'rows': rows}, ensure_ascii=False))")
+    rows = out.get("rows") if isinstance(out, dict) else None
+    if not rows or not isinstance(rows, list) or not all(isinstance(x, dict) for x in rows):
+        raise RuntimeError("the JSON needs 'rows': a non-empty list of objects, one per data row")
+    if not str(out.get("url", "")).startswith("http"):
+        raise RuntimeError("the JSON needs 'url': the dataset's public page or API query URL (http…)")
+    return out, last
+
+
+def _data_rows(rows):
+    """Records -> header line + one self-describing paragraph per row, as pxweb fetch writes them."""
+    head = list(dict.fromkeys(k for row in rows for k in row))
+
+    def fmt(v):
+        if v is None or (isinstance(v, float) and v != v):
+            return ""
+        return format(v, "g") if isinstance(v, float) and v.is_integer() and abs(v) < 1e15 else str(v)
+    return [" | ".join(head)] + [" | ".join(f"{k}: {fmt(row.get(k))}" for k in head) for row in rows]
+
+
+def cmd_data(a):
+    folder, script = Path(a.folder), Path(a.script).resolve()
+    if not script.exists():
+        sys.exit(f"no script {a.script}")
+    text = script.read_text(encoding="utf-8")
+    deps = _script_deps(text)
+    if deps is None:
+        sys.exit("the script needs a `# /// script` block listing its dependencies (see reference/statistics.md)")
+    loose = [d for d in deps if "==" not in d]
+    if loose:
+        sys.exit(f"pin every dependency to an exact version, so the Audit re-runs the same code: {', '.join(loose)}")
+    dest = folder / "evidence" / "files" / "data"
+    dest.mkdir(parents=True, exist_ok=True)
+    kept = dest / script.name
+    if kept.resolve() != script:
+        if kept.exists() and kept.read_text(encoding="utf-8") != text:
+            sys.exit(f"{kept.relative_to(folder)} exists with other code: rename your script")
+        kept.write_text(text, encoding="utf-8")
+    txt, meta = kept.with_suffix(".txt"), kept.with_suffix(".json")
+    if txt.exists() and meta.exists() and not a.refresh and \
+            json.loads(meta.read_text(encoding="utf-8")).get("script_sha256") == hashlib.sha256(text.encode()).hexdigest():
+        info = json.loads(meta.read_text(encoding="utf-8"))
+    else:
+        try:
+            out, raw = _run_data_script(kept)
+        except (RuntimeError, subprocess.TimeoutExpired) as e:
+            print(f"FAILED: {e}")
+            sys.exit(1)
+        paras = _data_rows(out["rows"])
+        txt.write_text("\n".join(paras) + "\n", encoding="utf-8")
+        info = {"url": out["url"], "fetched": datetime.date.today().isoformat(), "content_type": "application/json",
+                "kind": "data", "title": out.get("title", ""), "script": str(kept.relative_to(folder)),
+                "script_sha256": hashlib.sha256(text.encode()).hexdigest(),
+                "sha256": hashlib.sha256(raw.encode()).hexdigest(), "bytes": len(raw.encode()),
+                "paragraphs": len(paras), "tls_unverified": False}
+        meta.write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"cached: {txt.relative_to(folder)}  [data, {info['paragraphs'] - 1} rows]  {info['title']}  <{info['url']}>")
+    lines = txt.read_text(encoding="utf-8").splitlines()
+    for i, ln in enumerate(lines[:a.max + 1], 1):
+        print(f"L{i}: {ln[:300]}")
+    if len(lines) > a.max + 1:
+        print(f"… {len(lines) - a.max - 1} more rows; read them with show, or narrow the selection.")
+
+
 def cmd_search(a):
     _, lines = load_lines(a.file)
     print_hits(lines, a.keywords, a.max)
@@ -627,9 +717,13 @@ def cmd_verify(a):
                 rendered = bool(src) and src.endswith("-rendered.txt")
                 with tempfile.TemporaryDirectory() as td:
                     pmeta = (folder / src).with_suffix(".json") if src else None
-                    pq = json.loads(pmeta.read_text(encoding="utf-8")).get("post_query") if pmeta and pmeta.exists() else None
+                    pinfo = json.loads(pmeta.read_text(encoding="utf-8")) if pmeta and pmeta.exists() else {}
+                    pq, pscript = pinfo.get("post_query"), pinfo.get("script")
                     insecure = False
-                    if pq:
+                    if pscript:
+                        paras = _data_rows(_run_data_script(folder / pscript)[0]["rows"])
+                        note.append("re-ran script")
+                    elif pq:
                         raw, ctype = _px_json(url, pq)
                         paras = _px_rows(raw, ctype)
                         note.append("re-queried")
@@ -638,7 +732,7 @@ def cmd_verify(a):
                         note.append("re-rendered")
                     else:
                         raw, ctype, insecure = _get(url)
-                    if not pq:
+                    if not (pq or pscript):
                         paras, _, _ = to_paragraphs(raw, ctype, td)
                 live = match_quality(quote, norm(" ".join(paras)))
                 if insecure:
@@ -680,6 +774,13 @@ def main():
     p.add_argument("--max", type=int, default=20, help="tables or rows to print (default 20)")
     p.add_argument("--refresh", action="store_true")
     p.set_defaults(fn=cmd_pxweb)
+
+    p = sub.add_parser("data", help="run a pinned stats script (sistat, wbgapi, sdmx1 …) and cache its rows as text")
+    p.add_argument("folder")
+    p.add_argument("script", help="PEP 723 script; its last output line is JSON {title, url, rows}")
+    p.add_argument("--max", type=int, default=20, help="rows to print (default 20)")
+    p.add_argument("--refresh", action="store_true", help="re-run even if the script is unchanged")
+    p.set_defaults(fn=cmd_data)
 
     p = sub.add_parser("search", help="keyword hits in a cached/local file")
     p.add_argument("file")

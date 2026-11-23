@@ -69,10 +69,10 @@ If the folder already holds other things, the skill creates `<motion-slug>/` in 
 skills/debate/         the skill itself (everything that gets installed)
   SKILL.md             orchestrator instructions
   prompts/             Advocate, Auditor and Judge briefs
-  reference/           shared Evidence rules, site recipes
+  reference/           shared Evidence rules, site recipes, statistics sources
   templates/           case, Evidence, audit, motion, state, report, methodology,
                        project README.md and CLAUDE.md
-  scripts/             evidence.py (fetch, quote, verify, pxweb), ledger.py (checks),
+  scripts/             evidence.py (fetch, quote, verify, data, pxweb), ledger.py (checks),
                        report_html.py (HTML report), render.py (headless Chromium)
 tests/                 tests for the scripts (not installed); run them with
                        uv run --with markdown==3.7 --with pytest==9.2.0 pytest tests

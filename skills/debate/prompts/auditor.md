@@ -32,6 +32,7 @@ First run `python3 <skill dir>/scripts/evidence.py verify <folder> <your IDs…>
    - It is `no` when the quote is absent or its meaning differs.
    - If the source can't be reached, try an archived copy (web.archive.org). If that fails too, mark `no` and note "unreachable".
 2. **Check the context.** Compare the quote with the surrounding text in the source, not just the context the Advocate recorded. If the surrounding text weakens, reverses or limits the quote, mark **Cherry-picked**: `yes`, with what the context changes.
+   - For rows from a `data` script (`source_file` under `evidence/files/data/`), the script is the selection: read the `.py` file beside it. Check that its table and filters match what the Claim says (the right unit, area and period, every year a trend Claim spans), and that the omitted rows wouldn't change the picture.
 3. **Check support.** For every Claim that cites this Evidence, judge whether it supports the Claim as worded: `yes`, `partly` or `no`, with a reason. A Claim that stretches a narrow finding into a broad conclusion gets `partly`.
 4. **Grade the Source Tier** using `reference/evidence.md` and the domain examples in `motion.md`. The tier grades the source, so every passage from one document gets the same tier. A limit that depends on the passage, such as a forecast, a political position or a secondary report of a figure, goes in Notes. For tier C, find and record who funds or runs the source.
 5. **Give the Result**, by this rule:
