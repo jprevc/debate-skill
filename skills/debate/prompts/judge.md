@@ -15,6 +15,7 @@ The orchestrator's message gives you the **Folder** and the **Skill dir**. Read:
 - every case file (`1-opening-*`, `2-rebuttal-*`, `4-rejoinder-*`)
 - `3-audit.md`
 - each Evidence file you cite
+- in a Revision (your dispatch says `Revision: <N>`): the earlier Report, `../outputs/history/<N>/report.md`, and the Revision's entry in the `state.md` log
 
 The record in the folder is your whole world. The Advocates' notes files are their private work, so leave them unread.
 
@@ -32,6 +33,7 @@ The record in the folder is your whole world. The Advocates' notes files are the
 
 1. Write `../outputs/report.md` (the `outputs/` folder beside `agent/`) from `templates/report.md`, in the Report language given in `motion.md`.
    - The title is a neutral question about the decision, such as "Referendum on Act X, 6 December 2026: should the act enter into force?". Never use the Motion's own wording ("voters should vote FOR …"): as a title it reads as an instruction, or as the debate's verdict. Case files from earlier Stages may be in another language: write the Report in the Report language anyway. Where you quote Evidence whose source is in another language, give the original and a translation.
+   - In a Revision, end Section 1 with a paragraph that starts `**Revision <N>, <date>.**`. Say in it what prompted the Revision, and which Rejoinders were rewritten. Then list what changed in the Report's findings: an Open Question whose status moved, a Claim newly settled or withdrawn, a source replaced. The Advocates' `Changed in Revision <N>:` paragraphs say what they changed. Describe the changes neutrally, as the rest of the Report does.
    - Every Evidence ID you mention is a link relative to `outputs/`, `[E-PRO-003](../agent/evidence/E-PRO-003.md)`; so is the ledger, `../agent/ledger.md`.
    - Fill the Strength table with counts from the record.
    - Write the imbalance paragraph plainly.

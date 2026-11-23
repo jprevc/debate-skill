@@ -24,6 +24,10 @@ _Avoid_: Sub-issue, aspect, topic
 One step of the debate protocol: Framing, Opening Case, Rebuttal, Evidence Audit, Rejoinder, Judgment, Confrontation.
 _Avoid_: Phase, round
 
+**Revision**:
+A rerun of a finished debate in its own folder, from the Rejoinder on: the affected groups rewrite their Rejoinders with what changed since (new tools, sources or events), the new Evidence is audited, and the Judge writes a new Report that says what changed. The replaced files are kept in `history/<N>/`.
+_Avoid_: Version, rerun, new debate
+
 ## Participants
 
 **Advocate**:

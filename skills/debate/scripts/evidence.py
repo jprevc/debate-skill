@@ -860,6 +860,24 @@ def _front(text):
     return out
 
 
+def _live_paras(folder, url, pq, pscript, rendered):
+    """The live source's paragraphs and notes on how they were got, or (the exception, [])."""
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            if pscript:
+                return _data_rows(_run_data_script(folder / pscript)[0]["rows"]), ["re-ran script"]
+            if pq:
+                raw, ctype = _px_json(url, pq)
+                return _px_rows(raw, ctype), ["re-queried"]
+            if rendered:
+                raw, ctype, _ = _render(url)
+                return to_paragraphs(raw, ctype, td)[0], ["re-rendered"]
+            raw, ctype, insecure = _get(url)
+            return to_paragraphs(raw, ctype, td)[0], ["TLS unverified"] if insecure else []
+    except Exception as e:  # noqa: BLE001
+        return e, []
+
+
 def cmd_verify(a):
     folder = Path(a.folder)
     files = sorted((folder / "evidence").glob("E-*.md"))
@@ -867,6 +885,7 @@ def cmd_verify(a):
         want = set(a.ids)
         files = [f for f in files if f.stem in want]
     print("| Evidence | cached copy | live source | note |\n|---|---|---|---|")
+    sources = {}
     for f in files:
         text = f.read_text(encoding="utf-8")
         fm, quote = _front(text), _section(text, "Quote")
@@ -886,33 +905,20 @@ def cmd_verify(a):
                 cached = "file missing"
         live = "—"
         if url.startswith("http") and (a.live or not local):
-            try:
-                rendered = bool(src) and src.endswith("-rendered.txt")
-                with tempfile.TemporaryDirectory() as td:
-                    pmeta = (folder / src).with_suffix(".json") if src else None
-                    pinfo = json.loads(pmeta.read_text(encoding="utf-8")) if pmeta and pmeta.exists() else {}
-                    pq, pscript = pinfo.get("post_query"), pinfo.get("script")
-                    insecure = False
-                    if pscript:
-                        paras = _data_rows(_run_data_script(folder / pscript)[0]["rows"])
-                        note.append("re-ran script")
-                    elif pq:
-                        raw, ctype = _px_json(url, pq)
-                        paras = _px_rows(raw, ctype)
-                        note.append("re-queried")
-                    elif rendered:
-                        (raw, ctype, _), insecure = _render(url), False
-                        note.append("re-rendered")
-                    else:
-                        raw, ctype, insecure = _get(url)
-                    if not (pq or pscript):
-                        paras, _, _ = to_paragraphs(raw, ctype, td)
-                live = match_quality(quote, norm(" ".join(paras)))
-                if insecure:
-                    note.append("TLS unverified")
-            except Exception as e:  # noqa: BLE001
+            rendered = bool(src) and src.endswith("-rendered.txt")
+            pmeta = (folder / src).with_suffix(".json") if src else None
+            pinfo = json.loads(pmeta.read_text(encoding="utf-8")) if pmeta and pmeta.exists() else {}
+            pq, pscript = pinfo.get("post_query"), pinfo.get("script")
+            key = (url, pscript, json.dumps(pq, sort_keys=True), rendered)
+            if key not in sources:  # many Evidence quote one source: download it once per run
+                sources[key] = _live_paras(folder, url, pq, pscript, rendered)
+            paras, how = sources[key]
+            if isinstance(paras, Exception):
                 live = "unreachable"
-                note.append(f"{type(e).__name__}: {str(e)[:60]}")
+                note.append(f"{type(paras).__name__}: {str(paras)[:60]}")
+            else:
+                live = match_quality(quote, norm(" ".join(paras)))
+                note += how
         print(f"| {f.stem} | {cached} | {live} | {'; '.join(note)} |")
 
 

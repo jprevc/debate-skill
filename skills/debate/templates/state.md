@@ -5,6 +5,7 @@
 - Confrontation: on     # on | off (no-confrontation)
 - Report language: <e.g. Slovenian>
 - Created: YYYY-MM-DD
+- Revision: 0           # N (YYYY-MM-DD) after a Revision
 
 ## Advocate groups
 

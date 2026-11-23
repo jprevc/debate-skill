@@ -63,6 +63,8 @@ outputs/   report.md, report.html, confrontation.md (and report-<lang>.*, confro
 
 If the folder already holds other things, the skill creates `<motion-slug>/` in it instead.
 
+Run `/debate` again in a finished debate's folder to revise it rather than start over: tell it what has changed (new tools in the skill, new documents, new events), and the affected Advocates rewrite their Rejoinders, the new Evidence is audited, and the Judge writes a new Report that says what changed. Earlier Reports are kept in `outputs/history/`.
+
 ## Repository layout
 
 ```
