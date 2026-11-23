@@ -15,6 +15,7 @@ python3 <skill dir>/scripts/evidence.py fetch  <folder> <url> <keyword> [keyword
 python3 <skill dir>/scripts/evidence.py pxweb search <word*> [word* …]                # another PxWeb database (--base); for SiStat use a data script
 python3 <skill dir>/scripts/evidence.py pxweb meta <table> [CODE [keyword]]           # a table's variables and value codes
 python3 <skill dir>/scripts/evidence.py pxweb fetch <table> CODE=v1,v2 CODE=top:N … --folder <folder>   # cache the selected rows as text
+python3 <skill dir>/scripts/evidence.py papers <words …> | <DOI>                     # research papers in OpenAlex; one paper's type, retraction, funders (reference/research.md)
 python3 <skill dir>/scripts/evidence.py data <folder> <script.py>                     # run a pinned statistics script, cache its rows as text (reference/statistics.md)
 python3 <skill dir>/scripts/evidence.py search <cached file> <keyword> [keyword …]     # more keyword hits in a cached file
 python3 <skill dir>/scripts/evidence.py show   <cached file> <A-B>                     # read paragraphs A-B (max 40)
@@ -47,9 +48,9 @@ Rules:
 The Auditor grades every source by its independence from the outcome of the Motion. `motion.md` gives examples of each tier for this debate's domain.
 
 - **A**: primary or authoritative. The Primary Text, official statistics, court rulings, peer-reviewed research.
-- **B**: independent experts, such as fiscal councils, courts of audit, international bodies and quality journalism.
+- **B**: independent experts, such as fiscal councils, courts of audit, international bodies and quality journalism. Also research not yet peer-reviewed: preprints and working papers by independent researchers.
 - **C**: interested parties, such as advocacy groups, think tanks, parties, campaigns, vendors and the user's own situation. Record who funds or runs the source.
-- **D**: opinion, such as op-eds, blogs and social media. Valid only as Evidence of what someone said, never as Evidence of a fact.
+- **D**: opinion, such as op-eds, blogs and social media, and retracted papers. Valid only as Evidence of what someone said, never as Evidence of a fact.
 
 ## Claims
 

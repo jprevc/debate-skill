@@ -5,6 +5,8 @@ Subcommands (run with -h for options):
   fetch  <folder> <url> [keyword ...]   download page/PDF -> cached text in evidence/files/web/, print keyword hits
                                         (--render: load it in headless Chromium first, for JavaScript sites)
   pxweb  search|meta|fetch ...          statistical tables via the PxWeb API (SiStat by default)
+  papers <words ...> | <DOI>            research papers via OpenAlex: search, or one paper's type, retraction,
+                                        funders and open copies (OPENALEX_API_KEY optional)
   data   <folder> <script.py>           run a pinned statistics script (sistat, wbgapi, sdmx1 …) with uv and
                                         cache its rows as text in evidence/files/data/; verify --live re-runs it
   import <folder> <file> --name <slug>  text of a file the user supplied (in sources/) -> evidence/files/user-<slug>.txt;
@@ -468,6 +470,104 @@ def _pxweb(a):
             print(f"… {len(lines) - a.max - 1} more rows; read them with show, or narrow the selection.")
 
 
+# ---------- research papers (OpenAlex) ----------
+
+OPENALEX = "https://api.openalex.org"
+
+
+def _openalex(path, params):
+    key = os.environ.get("OPENALEX_API_KEY")
+    if key:
+        params = {**params, "api_key": key}
+    url = f"{OPENALEX}{path}?{urllib.parse.urlencode(params)}" if params else f"{OPENALEX}{path}"
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read(MAX_BYTES))
+
+
+def _work_kind(w):
+    """article | review | preprint | book … with the venue type, and RETRACTED when it is."""
+    src = (w.get("primary_location") or {}).get("source") or {}
+    kind = w.get("type", "?")
+    if kind == "article" and src.get("type") == "repository":
+        kind = "preprint"
+    return kind + (" · RETRACTED" if w.get("is_retracted") else "")
+
+
+def _copies(w):
+    seen, out = set(), []
+    for loc in w.get("locations") or []:
+        url = loc.get("pdf_url") or loc.get("landing_page_url")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        src = loc.get("source") or {}
+        out.append((url, loc.get("version") or "version unknown", src.get("type") or "?",
+                    "open" if loc.get("is_oa") else "closed"))
+    return out
+
+
+def _abstract(w):
+    inv = w.get("abstract_inverted_index") or {}
+    pos = sorted((i, word) for word, idx in inv.items() for i in idx)
+    return " ".join(word for _, word in pos)
+
+
+def cmd_papers(a):
+    try:
+        _papers(a)
+    except urllib.error.HTTPError as e:
+        print(f"FAILED: HTTP {e.code} {e.read()[:300].decode('utf-8', 'replace')}")
+        if e.code in (402, 429):
+            print("→ OpenAlex's free daily budget for this network is used up. Search the web for the paper instead, "
+                  "or ask the user for a free key (https://openalex.org/settings/api) in OPENALEX_API_KEY.")
+        sys.exit(1)
+    except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
+        print(f"FAILED: {type(e).__name__}: {e}")
+        sys.exit(1)
+
+
+def _papers(a):
+    q = " ".join(a.words).strip()
+    one = re.match(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)?(10\.\S+)$", q, re.I) or re.match(r"^(W\d+)$", q)
+    if one:
+        ident = one.group(1)
+        w = _openalex(f"/works/{'doi:' + ident if ident.startswith('10.') else ident}", {})
+        venue = ((w.get("primary_location") or {}).get("source") or {}).get("display_name", "no venue")
+        authors = [x["author"]["display_name"] for x in w.get("authorships", [])]
+        print(f"{w['display_name']}\n{w.get('publication_date', w.get('publication_year'))} · {_work_kind(w)} · {venue}"
+              f" · cited {w.get('cited_by_count', 0)} · {w.get('doi') or w['id']}")
+        print("authors: " + (", ".join(authors[:8]) + (f" … (+{len(authors) - 8})" if len(authors) > 8 else "") or "unknown"))
+        funders = [f.get("display_name", "") for f in w.get("funders") or []]
+        print("funders: " + (", ".join(funders) if funders else "none recorded (read the paper's acknowledgements)"))
+        print("copies (fetch the published version where you can):")
+        for url, ver, st, oa in _copies(w) or [("none listed", "", "", "")]:
+            print(f"  - {url}  [{ver}, {st}, {oa}]")
+        ab = _abstract(w)
+        print("abstract: " + (ab[:1500] + (" …" if len(ab) > 1500 else "") if ab else "none in OpenAlex"))
+        return
+    filters = []
+    if a.since:
+        filters.append(f"publication_year:>{a.since - 1}")
+    if a.reviews:
+        filters.append("type:review")
+    if a.open:
+        filters.append("is_oa:true")
+    params = {"search": q, "per-page": a.max,
+              "select": "id,doi,display_name,publication_year,type,cited_by_count,is_retracted,"
+                        "primary_location,locations"}
+    if filters:
+        params["filter"] = ",".join(filters)
+    res = _openalex("/works", params)
+    print(f"{res['meta']['count']} work(s) for '{q}', {len(res['results'])} shown")
+    for w in res["results"]:
+        venue = ((w.get("primary_location") or {}).get("source") or {}).get("display_name", "no venue")
+        doi = (w.get("doi") or "").replace("https://doi.org/", "") or w["id"].rsplit("/", 1)[-1]
+        opens = [f"{u} [{v}]" for u, v, _, oa in _copies(w) if oa == "open"]
+        print(f"- {w.get('publication_year')} · {_work_kind(w)} · cited {w.get('cited_by_count', 0)} · {venue} · {doi}\n"
+              f"  {w['display_name']}\n  open copy: {opens[0] if opens else 'none listed'}")
+
+
 # ---------- data scripts (statistics through a Python library: sistat, wbgapi, sdmx1, …) ----------
 
 _DEPS = re.compile(r"^# /// script$(.*?)^# ///$", re.S | re.M)
@@ -774,6 +874,14 @@ def main():
     p.add_argument("--max", type=int, default=20, help="tables or rows to print (default 20)")
     p.add_argument("--refresh", action="store_true")
     p.set_defaults(fn=cmd_pxweb)
+
+    p = sub.add_parser("papers", help="find research papers in OpenAlex, or look one up by DOI")
+    p.add_argument("words", nargs="+", help="search words, or one DOI / OpenAlex id for the paper's details")
+    p.add_argument("--since", type=int, help="published in this year or later")
+    p.add_argument("--reviews", action="store_true", help="only reviews (systematic reviews, meta-analyses, surveys)")
+    p.add_argument("--open", action="store_true", help="only papers with an open-access copy")
+    p.add_argument("--max", type=int, default=10, help="papers to list (default 10)")
+    p.set_defaults(fn=cmd_papers)
 
     p = sub.add_parser("data", help="run a pinned stats script (sistat, wbgapi, sdmx1 …) and cache its rows as text")
     p.add_argument("folder")

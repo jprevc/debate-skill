@@ -35,6 +35,7 @@ First run `python3 <skill dir>/scripts/evidence.py verify <folder> <your IDs…>
    - For rows from a `data` script (`source_file` under `evidence/files/data/`), the script is the selection: read the `.py` file beside it. Check that its table and filters match what the Claim says (the right unit, area and period, every year a trend Claim spans), and that the omitted rows wouldn't change the picture.
 3. **Check support.** For every Claim that cites this Evidence, judge whether it supports the Claim as worded: `yes`, `partly` or `no`, with a reason. A Claim that stretches a narrow finding into a broad conclusion gets `partly`.
 4. **Grade the Source Tier** using `reference/evidence.md` and the domain examples in `motion.md`. The tier grades the source, so every passage from one document gets the same tier. A limit that depends on the passage, such as a forecast, a political position or a secondary report of a figure, goes in Notes. For tier C, find and record who funds or runs the source.
+   - For a research paper, run `evidence.py papers <DOI>`. It shows whether the paper is peer-reviewed or a preprint, whether it has been retracted, and its recorded funders. Note in Notes when the quote comes from a preprint version of a published paper, or from the abstract only.
 5. **Give the Result**, by this rule:
    - `failed`: Quote found is `no`, or every citing Claim is `no`.
    - `partial`: Quote found is `partially`, Cherry-picked is `yes` or `partly`, or any citing Claim is `partly` or `no`. A Claim supported for one part and not another counts as `partly`.
