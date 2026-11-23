@@ -2,6 +2,8 @@
 
 Run: uv run --with markdown==3.7 --with pytest==9.2.0 pytest tests
 """
+import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -40,6 +42,19 @@ class Papers(unittest.TestCase):
     def test_abstract_is_rebuilt_from_the_inverted_index(self):
         w = {"abstract_inverted_index": {"wages": [1], "Minimum": [0], "rose": [2], "and": [3], "fell": [5], "jobs": [4]}}
         self.assertEqual(evidence._abstract(w), "Minimum wages rose and jobs fell")
+
+    def check(self, key):
+        env = {k: v for k, v in os.environ.items() if k != "OPENALEX_API_KEY"} | ({"OPENALEX_API_KEY": key} if key else {})
+        return subprocess.run([sys.executable, evidence.__file__, "papers", "--check"],
+                              capture_output=True, text=True, env=env)
+
+    def test_a_missing_key_is_a_warning(self):
+        r = self.check(None)
+        self.assertEqual(r.returncode, 0)
+        self.assertTrue(r.stdout.startswith("WARNING: OPENALEX_API_KEY is not set"))
+
+    def test_a_set_key_gives_no_warning(self):
+        self.assertEqual(self.check("k").stdout, "OPENALEX_API_KEY is set.\n")
 
 
 if __name__ == "__main__":

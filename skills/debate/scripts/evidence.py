@@ -527,7 +527,20 @@ def cmd_papers(a):
         sys.exit(1)
 
 
+NO_KEY = ("WARNING: OPENALEX_API_KEY is not set, so paper searches share one small free daily budget with everyone "
+          "on this network, and can stop working mid-debate. A free key: https://openalex.org/settings/api; set it "
+          "as OPENALEX_API_KEY (in Claude Code, under \"env\" in ~/.claude/settings.json) and start a new session.")
+
+
 def _papers(a):
+    if not os.environ.get("OPENALEX_API_KEY"):
+        print(NO_KEY)
+    if a.check:
+        if os.environ.get("OPENALEX_API_KEY"):
+            print("OPENALEX_API_KEY is set.")
+        return
+    if not a.words:
+        sys.exit("usage: papers <words …> | <DOI>   (or --check)")
     q = " ".join(a.words).strip()
     one = re.match(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)?(10\.\S+)$", q, re.I) or re.match(r"^(W\d+)$", q)
     if one:
@@ -876,7 +889,8 @@ def main():
     p.set_defaults(fn=cmd_pxweb)
 
     p = sub.add_parser("papers", help="find research papers in OpenAlex, or look one up by DOI")
-    p.add_argument("words", nargs="+", help="search words, or one DOI / OpenAlex id for the paper's details")
+    p.add_argument("words", nargs="*", help="search words, or one DOI / OpenAlex id for the paper's details")
+    p.add_argument("--check", action="store_true", help="only say whether OPENALEX_API_KEY is set")
     p.add_argument("--since", type=int, help="published in this year or later")
     p.add_argument("--reviews", action="store_true", help="only reviews (systematic reviews, meta-analyses, surveys)")
     p.add_argument("--open", action="store_true", help="only papers with an open-access copy")

@@ -43,7 +43,7 @@ The other Side's notes are its private work. Your case stands on the public reco
    - Work in parallel: put independent searches and fetches in the same turn, for example four WebSearch calls at once, then four `fetch` calls on the best hits.
 3. **Write** your output file from `templates/case.md`. Use Claim and response formats from `reference/evidence.md`. Write the content in the Report language, but keep the template's `##` headings and the format labels (`Dimension:`, `Type:`, `Evidence:`, `Rebut`, `Priority:` …) exactly as written in English, and spell each Dimension name exactly as in `motion.md`. `scripts/ledger.py` reads them.
 4. **Update your notes file**: leads followed, dead ends with the reason each failed, the weak points you see in your own case, and attacks planned for later Stages. The next Stage is run by a fresh Advocate whose only memory is this file. Write the notes for that reader.
-5. **Reply** to the orchestrator with three things: the case file path, the number of new Evidence files, and your Evidence Requests (IDs and priorities).
+5. **Reply** to the orchestrator with three things: the case file path, the number of new Evidence files, and your Evidence Requests (IDs and priorities). If `papers` printed a `WARNING` or said the budget is used up, add that line too, word for word.
 
 ## Stage specifics
 

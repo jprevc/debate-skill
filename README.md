@@ -27,6 +27,7 @@ The main agent stops after each Stage and asks before starting the next. When an
 - `python3` (3.12+) and [`uv`](https://docs.astral.sh/uv/) (runs the scripts with their pinned dependencies)
 - `pdftotext` (poppler-utils) for PDF sources
 - Chromium for JavaScript sites (`evidence.py fetch --render`): `uvx playwright@1.65.2 install chromium`
+- An OpenAlex API key for research-paper searches (`evidence.py papers`), free at https://openalex.org/settings/api. Set it as `OPENALEX_API_KEY`, in Claude Code under `"env"` in `~/.claude/settings.json`. Without it, searches share a small daily budget per network, and the debate warns you.
 
 ## Install
 
