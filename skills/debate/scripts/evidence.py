@@ -475,14 +475,57 @@ def _pxweb(a):
 OPENALEX = "https://api.openalex.org"
 
 
+class BudgetSpent(Exception):
+    """OpenAlex's daily budget (the key's, or the network's shared one without a key) is used up."""
+
+
+_budget = {}  # X-RateLimit-* headers of the last OpenAlex response
+
+
 def _openalex(path, params):
     key = os.environ.get("OPENALEX_API_KEY")
     if key:
         params = {**params, "api_key": key}
     url = f"{OPENALEX}{path}?{urllib.parse.urlencode(params)}" if params else f"{OPENALEX}{path}"
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.loads(r.read(MAX_BYTES))
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                _budget.update({k.lower(): v for k, v in r.headers.items() if k.lower().startswith("x-ratelimit-")})
+                return json.loads(r.read(MAX_BYTES))
+        except urllib.error.HTTPError as e:
+            if e.code != 429:
+                raise
+            try:
+                body = json.loads(e.read(MAX_BYTES))
+            except ValueError:
+                body = {}
+            if body.get("reason") == "daily_budget" or body.get("error") == "not_enough_credits":
+                raise BudgetSpent(e.headers.get("X-RateLimit-Reset"))
+            if attempt == 3:  # a per-second limit: wait as told, then retry
+                raise
+            import time
+            time.sleep(min(float(e.headers.get("Retry-After") or 1), 30))
+
+
+def _hours(seconds):
+    try:
+        return f"in about {max(1, round(int(seconds) / 3600))} h"
+    except (TypeError, ValueError):
+        return "at midnight UTC"
+
+
+def _budget_warning():
+    """WARNING when less than a tenth of today's budget is left."""
+    try:
+        left, limit = int(_budget["x-ratelimit-remaining"]), int(_budget["x-ratelimit-limit"])
+        per_search = int(_budget.get("x-ratelimit-credits-used") or 10) or 10
+    except (KeyError, ValueError):
+        return
+    if left < limit / 10:
+        whose = "this key's" if os.environ.get("OPENALEX_API_KEY") else "this network's shared"
+        print(f"WARNING: OpenAlex budget low: {whose} budget has about {left // per_search} searches left today; "
+              f"it resets {_hours(_budget.get('x-ratelimit-reset'))}. Search only for what your Claims need.")
 
 
 def _work_kind(w):
@@ -516,11 +559,20 @@ def _abstract(w):
 def cmd_papers(a):
     try:
         _papers(a)
+        _budget_warning()
+    except BudgetSpent as e:
+        if os.environ.get("OPENALEX_API_KEY"):
+            print(f"WARNING: OpenAlex budget used up: this key's daily budget is spent; it resets {_hours(str(e))}. "
+                  "Until then, find papers with WebSearch and Google Scholar, and fetch them as usual.")
+        else:
+            print(f"WARNING: OpenAlex budget used up: the shared daily budget for this network is spent; it resets "
+                  f"{_hours(str(e))}. Until then, find papers with WebSearch and Google Scholar. A free key "
+                  "(https://openalex.org/settings/api, set as OPENALEX_API_KEY) has its own, ten times larger budget.")
+        sys.exit(1)
     except urllib.error.HTTPError as e:
         print(f"FAILED: HTTP {e.code} {e.read()[:300].decode('utf-8', 'replace')}")
-        if e.code in (402, 429):
-            print("→ OpenAlex's free daily budget for this network is used up. Search the web for the paper instead, "
-                  "or ask the user for a free key (https://openalex.org/settings/api) in OPENALEX_API_KEY.")
+        if e.code in (401, 403) and os.environ.get("OPENALEX_API_KEY"):
+            print("WARNING: OpenAlex refused OPENALEX_API_KEY: check the key at https://openalex.org/settings/api.")
         sys.exit(1)
     except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
         print(f"FAILED: {type(e).__name__}: {e}")
@@ -537,7 +589,12 @@ def _papers(a):
         print(NO_KEY)
     if a.check:
         if os.environ.get("OPENALEX_API_KEY"):
-            print("OPENALEX_API_KEY is set.")
+            r = _openalex("/rate-limit", {})["rate_limit"]  # free: costs no budget
+            left, total = r["daily_remaining_usd"], r["daily_budget_usd"]
+            print(f"OPENALEX_API_KEY is set: {left / total:.0%} of today's budget left, "
+                  f"about {round(left / 0.001)} searches; it resets {_hours(r.get('resets_in_seconds'))}.")
+            if left < total / 10:
+                print("WARNING: OpenAlex budget low: fewer than a tenth of today's searches are left.")
         return
     if not a.words:
         sys.exit("usage: papers <words …> | <DOI>   (or --check)")

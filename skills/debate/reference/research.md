@@ -9,7 +9,7 @@ python3 <skill dir>/scripts/evidence.py papers <words …> [--since YEAR] [--rev
 python3 <skill dir>/scripts/evidence.py papers <DOI>          # one paper: type, retraction, authors, funders, copies, abstract
 ```
 
-`papers` searches OpenAlex, an open index of scholarly works. Each hit shows its year, type, citation count, venue and DOI, and whether a free copy exists. Write the search words in English, the language most research is indexed in. Add the country's name when the setting matters (`minimum wage employment Slovenia`). WebSearch and Google Scholar find papers too: look each one up with `papers <DOI>` before you cite it. Without an `OPENALEX_API_KEY`, `papers` prints a `WARNING` and searches share a small daily budget: keep searching, and report the warning in your reply.
+`papers` searches OpenAlex, an open index of scholarly works. Each hit shows its year, type, citation count, venue and DOI, and whether a free copy exists. Write the search words in English, the language most research is indexed in. Add the country's name when the setting matters (`minimum wage employment Slovenia`). WebSearch and Google Scholar find papers too: look each one up with `papers <DOI>` before you cite it. Each search spends some of a daily budget; a DOI lookup is free. `papers` prints a `WARNING` when there is no `OPENALEX_API_KEY`, when the budget runs low, and when it is used up. Report every warning in your reply. Once the budget is used up, find papers with WebSearch and Google Scholar, and fetch them as usual.
 
 Look for the strongest kind of evidence first:
 

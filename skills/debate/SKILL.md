@@ -69,7 +69,7 @@ The user may give a Motion, a link or a question. They may add `quick`, which sk
    - `agent/evidence/`, and the empty `outputs/`
    - `README.md` from `templates/project-readme.md` and `CLAUDE.md` from `templates/project-claude.md`, in `<project>`. Fill in every placeholder, with `<skill dir>` as its absolute path, and drop the parts that don't apply (groups, translation, quick mode). Status is "in progress", and the Report rows say "not written yet (Stage 5)". If either file already exists and isn't one of these, leave it and add the template's text under its own heading at the end.
 7. **Groups.** With more than about six Dimensions, split them into groups (A, B, …) of related Dimensions. Each group gets its own Advocate per Side. Record the groups in `state.md`.
-8. **Paper search.** Run `python3 <skill dir>/scripts/evidence.py papers --check`. If it prints a `WARNING`, the OpenAlex key is missing: pass the warning on to the user, with the link and where to set the key, before the debate starts. The debate can go on without the key, but paper searches may run out partway through.
+8. **Paper search.** Run `python3 <skill dir>/scripts/evidence.py papers --check`. If it prints a `WARNING` (no key, or little of today's budget left), pass it on to the user before the debate starts. The debate can go on without the key, but paper searches may run out partway through.
 9. Mark Framing `done`, then tell the user the debate is starting and roughly how many subagent runs it will take.
 
 ## Dispatching
@@ -148,7 +148,7 @@ After every Stage, in this order:
    - Put what the user supplies in `sources/` (pasted text as a `.txt` file there), `import` it, save it as `E-USER-NNN`, and mark the request `fulfilled` with that ID, or `partial` with a `Still missing:` sentence when it covers only part.
    - If the user can't get something, mark it `unavailable`.
    - The debate goes on either way: pending Claims stay pending, and the Report shows them as unsupported.
-4. **Tool warnings.** If an Advocate's reply says `papers` warned of a missing OpenAlex key or a used-up budget, tell the user in the checkpoint, with the link and where to set the key.
+4. **Tool warnings.** If an Advocate's reply quotes a `WARNING` from `papers` (no OpenAlex key, a low or used-up budget, a refused key), pass it on to the user in the checkpoint. A used-up budget resets at midnight UTC; the debate goes on, with papers found through WebSearch until then.
 5. **State.** Mark the Stage `done`, and log anything you reran or skipped.
 6. **Checkpoint.** Give the user a short progress note and name the next Stage with its number of dispatches. Then wait: dispatch the next Stage only when the user says to continue. After Judgment, skip the checkpoint and go straight on to Stage 6.
 
