@@ -12,16 +12,18 @@ Sources go through `scripts/evidence.py` (in the skill dir; run it with `-h` for
 python3 <skill dir>/scripts/evidence.py sources <folder> <keyword> [keyword …]        # sources already cached by anyone in this debate
 python3 <skill dir>/scripts/evidence.py fetch  <folder> <url> <keyword> [keyword …]   # cache page/PDF as text, print matching paragraphs
         [--render]                                                                     # load it in headless Chromium first (JavaScript sites)
-python3 <skill dir>/scripts/evidence.py pxweb search <word*> [word* …]                # statistical tables (SiStat by default; --base for another PxWeb API)
+python3 <skill dir>/scripts/evidence.py pxweb search <word*> [word* …]                # another PxWeb database (--base); for SiStat use a data script
 python3 <skill dir>/scripts/evidence.py pxweb meta <table> [CODE [keyword]]           # a table's variables and value codes
 python3 <skill dir>/scripts/evidence.py pxweb fetch <table> CODE=v1,v2 CODE=top:N … --folder <folder>   # cache the selected rows as text
+python3 <skill dir>/scripts/evidence.py papers <words …> | <DOI>                     # research papers in OpenAlex; one paper's type, retraction, funders (reference/research.md)
+python3 <skill dir>/scripts/evidence.py data <folder> <script.py>                     # run a pinned statistics script, cache its rows as text (reference/statistics.md)
 python3 <skill dir>/scripts/evidence.py search <cached file> <keyword> [keyword …]     # more keyword hits in a cached file
 python3 <skill dir>/scripts/evidence.py show   <cached file> <A-B>                     # read paragraphs A-B (max 40)
 python3 <skill dir>/scripts/evidence.py quote  <folder> <cached file> <A-B> --id … --added-by … --stage … \
         --title … --publisher … --language … [--author …] [--published …] [--from TEXT] [--to TEXT] [--translation TEXT]
 ```
 
-The user's own files stay unchanged in `../sources/`; their text is in `evidence/files/user-*.txt` (made by `evidence.py import`, which records the original as the url). Quote from those extracts like any cached file. `fetch` stores a text copy in `evidence/files/web/` with one paragraph per line, so ranges are paragraph numbers. The cache is shared: what any participant fetched, every other participant can reuse with `sources` and `search`, at no download cost. When a plain `fetch` returns little or no text, the site needs JavaScript: rerun it with `--render`. A rendered page also lists its document links (PDF, attachments). `fetch` the one you need, because the document itself is the better source. Known URL schemes for particular sites are in `reference/sites.md`. For official statistics, query the statistical office's database with `pxweb` rather than quoting a press release about it. `pxweb fetch` caches one row per line with every column named (`LETO: 2025`), so `quote` and the Audit work on a row exactly as on a paragraph. Select only the rows your Claim needs. `quote` copies the quote and one paragraph of context on each side straight from that copy into the Evidence file, and records `source_file` and `source_lines`. Use `--from` and `--to` to trim the quote to a sentence within its first and last paragraph. That keeps every quote verbatim by construction, and lets the Audit check it mechanically. `templates/evidence.md` shows the result. Write an Evidence file by hand only for a source the script can't fetch but you could read, and then fill in every field of the template.
+The user's own files stay unchanged in `../sources/`; their text is in `evidence/files/user-*.txt` (made by `evidence.py import`, which records the original as the url). Quote from those extracts like any cached file. `fetch` stores a text copy in `evidence/files/web/` with one paragraph per line, so ranges are paragraph numbers. The cache is shared: what any participant fetched, every other participant can reuse with `sources` and `search`, at no download cost. When a plain `fetch` returns little or no text, the site needs JavaScript: rerun it with `--render`. A rendered page also lists its document links (PDF, attachments). `fetch` the one you need, because the document itself is the better source. Known URL schemes for particular sites are in `reference/sites.md`. For a statistical figure, query the database with a `data` script, as `reference/statistics.md` describes, rather than quoting a press release about it. `data` caches one row per line with every column named (`LETO: 2025`), so `quote` and the Audit work on a row exactly as on a paragraph. `quote` copies the quote and one paragraph of context on each side straight from that copy into the Evidence file, and records `source_file` and `source_lines`. Use `--from` and `--to` to trim the quote to a sentence within its first and last paragraph. That keeps every quote verbatim by construction, and lets the Audit check it mechanically. `templates/evidence.md` shows the result. Write an Evidence file by hand only for a source the script can't fetch but you could read, and then fill in every field of the template.
 
 | Prefix | Added by |
 |---|---|
@@ -46,9 +48,9 @@ Rules:
 The Auditor grades every source by its independence from the outcome of the Motion. `motion.md` gives examples of each tier for this debate's domain.
 
 - **A**: primary or authoritative. The Primary Text, official statistics, court rulings, peer-reviewed research.
-- **B**: independent experts, such as fiscal councils, courts of audit, international bodies and quality journalism.
+- **B**: independent experts, such as fiscal councils, courts of audit, international bodies and quality journalism. Also research not yet peer-reviewed: preprints and working papers by independent researchers.
 - **C**: interested parties, such as advocacy groups, think tanks, parties, campaigns, vendors and the user's own situation. Record who funds or runs the source.
-- **D**: opinion, such as op-eds, blogs and social media. Valid only as Evidence of what someone said, never as Evidence of a fact.
+- **D**: opinion, such as op-eds, blogs and social media, and retracted papers. Valid only as Evidence of what someone said, never as Evidence of a fact.
 
 ## Claims
 

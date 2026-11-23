@@ -27,6 +27,7 @@ The main agent stops after each Stage and asks before starting the next. When an
 - `python3` (3.12+) and [`uv`](https://docs.astral.sh/uv/) (runs the scripts with their pinned dependencies)
 - `pdftotext` (poppler-utils) for PDF sources
 - Chromium for JavaScript sites (`evidence.py fetch --render`): `uvx playwright@1.65.2 install chromium`
+- An OpenAlex API key for research-paper searches (`evidence.py papers`), free at https://openalex.org/settings/api. Set it as `OPENALEX_API_KEY`, in Claude Code under `"env"` in `~/.claude/settings.json`. Without it, searches share a small daily budget per network, and the debate warns you.
 
 ## Install
 
@@ -69,10 +70,10 @@ If the folder already holds other things, the skill creates `<motion-slug>/` in 
 skills/debate/         the skill itself (everything that gets installed)
   SKILL.md             orchestrator instructions
   prompts/             Advocate, Auditor and Judge briefs
-  reference/           shared Evidence rules, site recipes
+  reference/           shared Evidence rules, site recipes, statistics sources, research papers
   templates/           case, Evidence, audit, motion, state, report, methodology,
                        project README.md and CLAUDE.md
-  scripts/             evidence.py (fetch, quote, verify, pxweb), ledger.py (checks),
+  scripts/             evidence.py (fetch, quote, verify, papers, data, pxweb), ledger.py (checks),
                        report_html.py (HTML report), render.py (headless Chromium)
 tests/                 tests for the scripts (not installed); run them with
                        uv run --with markdown==3.7 --with pytest==9.2.0 pytest tests

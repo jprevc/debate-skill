@@ -35,13 +35,15 @@ The other Side's notes are its private work. Your case stands on the public reco
 
 1. **Orient.** Read the files listed above. If your notes file doesn't exist yet, your earlier case files are your memory. In `state.md`, find any Evidence Requests of yours that are now `fulfilled` or `partial` (partly fulfilled: its "Still missing:" sentence says what is still to come). "Fulfilled by" names either an `E-USER-*` Evidence file or a cached file under `evidence/files/`. Record Evidence from a cached file with `quote`. Restate each affected Claim with that Evidence in your output, using its existing Claim ID.
 2. **Research.** Before you search for a document, run `scripts/evidence.py sources` with its keywords: another Advocate, of either Side, may already have cached it, and it may already be Evidence you can cite. Also check `reference/sites.md` for the site's URL scheme. Find new sources with WebSearch. Search in every language that matters for the Motion's context. Go to primary sources over coverage of them: the statute rather than the article about it, the dataset rather than the press release.
+   - For a statistical figure (Slovenian, EU or world), follow `reference/statistics.md`.
+   - For a research finding, follow `reference/research.md`.
    - Open every source with `scripts/evidence.py fetch` and the keywords you're looking for. WebFetch summarises and won't return verbatim text, and reading a PDF with Read loads its pages as images. `fetch` handles PDFs and expired certificates and prints only the matching paragraphs.
    - Read the paragraphs around a hit with `show`, in narrow ranges. The Primary Text is already cached in `evidence/files/`: use `search` on it for your articles instead of reading it whole.
    - Record each piece of Evidence with `quote` the moment you find it. The next free ID is the highest `evidence/<your prefix>-NNN.md` plus one.
    - Work in parallel: put independent searches and fetches in the same turn, for example four WebSearch calls at once, then four `fetch` calls on the best hits.
 3. **Write** your output file from `templates/case.md`. Use Claim and response formats from `reference/evidence.md`. Write the content in the Report language, but keep the template's `##` headings and the format labels (`Dimension:`, `Type:`, `Evidence:`, `Rebut`, `Priority:` …) exactly as written in English, and spell each Dimension name exactly as in `motion.md`. `scripts/ledger.py` reads them.
 4. **Update your notes file**: leads followed, dead ends with the reason each failed, the weak points you see in your own case, and attacks planned for later Stages. The next Stage is run by a fresh Advocate whose only memory is this file. Write the notes for that reader.
-5. **Reply** to the orchestrator with three things: the case file path, the number of new Evidence files, and your Evidence Requests (IDs and priorities).
+5. **Reply** to the orchestrator with three things: the case file path, the number of new Evidence files, and your Evidence Requests (IDs and priorities). If `papers` printed a `WARNING` line, add it too, word for word.
 
 ## Stage specifics
 

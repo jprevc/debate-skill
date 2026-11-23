@@ -5,6 +5,10 @@ Subcommands (run with -h for options):
   fetch  <folder> <url> [keyword ...]   download page/PDF -> cached text in evidence/files/web/, print keyword hits
                                         (--render: load it in headless Chromium first, for JavaScript sites)
   pxweb  search|meta|fetch ...          statistical tables via the PxWeb API (SiStat by default)
+  papers <words ...> | <DOI>            research papers via OpenAlex: search, or one paper's type, retraction,
+                                        funders and open copies (OPENALEX_API_KEY optional)
+  data   <folder> <script.py>           run a pinned statistics script (sistat, wbgapi, sdmx1 …) with uv and
+                                        cache its rows as text in evidence/files/data/; verify --live re-runs it
   import <folder> <file> --name <slug>  text of a file the user supplied (in sources/) -> evidence/files/user-<slug>.txt;
                                         the original is never changed, and its path becomes the Evidence url
   sources <folder> [keyword ...]        list sources already cached in evidence/files/, matching the keywords
@@ -466,6 +470,262 @@ def _pxweb(a):
             print(f"… {len(lines) - a.max - 1} more rows; read them with show, or narrow the selection.")
 
 
+# ---------- research papers (OpenAlex) ----------
+
+OPENALEX = "https://api.openalex.org"
+
+
+class BudgetSpent(Exception):
+    """OpenAlex's daily budget (the key's, or the network's shared one without a key) is used up."""
+
+
+_budget = {}  # X-RateLimit-* headers of the last OpenAlex response
+
+
+def _openalex(path, params):
+    key = os.environ.get("OPENALEX_API_KEY")
+    if key:
+        params = {**params, "api_key": key}
+    url = f"{OPENALEX}{path}?{urllib.parse.urlencode(params)}" if params else f"{OPENALEX}{path}"
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                _budget.update({k.lower(): v for k, v in r.headers.items() if k.lower().startswith("x-ratelimit-")})
+                return json.loads(r.read(MAX_BYTES))
+        except urllib.error.HTTPError as e:
+            if e.code != 429:
+                raise
+            try:
+                body = json.loads(e.read(MAX_BYTES))
+            except ValueError:
+                body = {}
+            if body.get("reason") == "daily_budget" or body.get("error") == "not_enough_credits":
+                raise BudgetSpent(e.headers.get("X-RateLimit-Reset"))
+            if attempt == 3:  # a per-second limit: wait as told, then retry
+                raise
+            import time
+            time.sleep(min(float(e.headers.get("Retry-After") or 1), 30))
+
+
+def _hours(seconds):
+    try:
+        return f"in about {max(1, round(int(seconds) / 3600))} h"
+    except (TypeError, ValueError):
+        return "at midnight UTC"
+
+
+def _budget_warning():
+    """WARNING when less than a tenth of today's budget is left."""
+    try:
+        left, limit = int(_budget["x-ratelimit-remaining"]), int(_budget["x-ratelimit-limit"])
+        per_search = int(_budget.get("x-ratelimit-credits-used") or 10) or 10
+    except (KeyError, ValueError):
+        return
+    if left < limit / 10:
+        whose = "this key's" if os.environ.get("OPENALEX_API_KEY") else "this network's shared"
+        print(f"WARNING: OpenAlex budget low: {whose} budget has about {left // per_search} searches left today; "
+              f"it resets {_hours(_budget.get('x-ratelimit-reset'))}. Search only for what your Claims need.")
+
+
+def _work_kind(w):
+    """article | review | preprint | book … with the venue type, and RETRACTED when it is."""
+    src = (w.get("primary_location") or {}).get("source") or {}
+    kind = w.get("type", "?")
+    if kind == "article" and src.get("type") == "repository":
+        kind = "preprint"
+    return kind + (" · RETRACTED" if w.get("is_retracted") else "")
+
+
+def _copies(w):
+    seen, out = set(), []
+    for loc in w.get("locations") or []:
+        url = loc.get("pdf_url") or loc.get("landing_page_url")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        src = loc.get("source") or {}
+        out.append((url, loc.get("version") or "version unknown", src.get("type") or "?",
+                    "open" if loc.get("is_oa") else "closed"))
+    return out
+
+
+def _abstract(w):
+    inv = w.get("abstract_inverted_index") or {}
+    pos = sorted((i, word) for word, idx in inv.items() for i in idx)
+    return " ".join(word for _, word in pos)
+
+
+def cmd_papers(a):
+    try:
+        _papers(a)
+        _budget_warning()
+    except BudgetSpent as e:
+        if os.environ.get("OPENALEX_API_KEY"):
+            print(f"WARNING: OpenAlex budget used up: this key's daily budget is spent; it resets {_hours(str(e))}. "
+                  "Until then, find papers with WebSearch and Google Scholar, and fetch them as usual.")
+        else:
+            print(f"WARNING: OpenAlex budget used up: the shared daily budget for this network is spent; it resets "
+                  f"{_hours(str(e))}. Until then, find papers with WebSearch and Google Scholar. A free key "
+                  "(https://openalex.org/settings/api, set as OPENALEX_API_KEY) has its own, ten times larger budget.")
+        sys.exit(1)
+    except urllib.error.HTTPError as e:
+        print(f"FAILED: HTTP {e.code} {e.read()[:300].decode('utf-8', 'replace')}")
+        if e.code in (401, 403) and os.environ.get("OPENALEX_API_KEY"):
+            print("WARNING: OpenAlex refused OPENALEX_API_KEY: check the key at https://openalex.org/settings/api.")
+        sys.exit(1)
+    except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
+        print(f"FAILED: {type(e).__name__}: {e}")
+        sys.exit(1)
+
+
+NO_KEY = ("WARNING: OPENALEX_API_KEY is not set, so paper searches share one small free daily budget with everyone "
+          "on this network, and can stop working mid-debate. A free key: https://openalex.org/settings/api; set it "
+          "as OPENALEX_API_KEY (in Claude Code, under \"env\" in ~/.claude/settings.json) and start a new session.")
+
+
+def _papers(a):
+    if not os.environ.get("OPENALEX_API_KEY"):
+        print(NO_KEY)
+    if a.check:
+        if os.environ.get("OPENALEX_API_KEY"):
+            r = _openalex("/rate-limit", {})["rate_limit"]  # free: costs no budget
+            left, total = r["daily_remaining_usd"], r["daily_budget_usd"]
+            print(f"OPENALEX_API_KEY is set: {left / total:.0%} of today's budget left, "
+                  f"about {round(left / 0.001)} searches; it resets {_hours(r.get('resets_in_seconds'))}.")
+            if left < total / 10:
+                print("WARNING: OpenAlex budget low: fewer than a tenth of today's searches are left.")
+        return
+    if not a.words:
+        sys.exit("usage: papers <words …> | <DOI>   (or --check)")
+    q = " ".join(a.words).strip()
+    one = re.match(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)?(10\.\S+)$", q, re.I) or re.match(r"^(W\d+)$", q)
+    if one:
+        ident = one.group(1)
+        w = _openalex(f"/works/{'doi:' + ident if ident.startswith('10.') else ident}", {})
+        venue = ((w.get("primary_location") or {}).get("source") or {}).get("display_name", "no venue")
+        authors = [x["author"]["display_name"] for x in w.get("authorships", [])]
+        print(f"{w['display_name']}\n{w.get('publication_date', w.get('publication_year'))} · {_work_kind(w)} · {venue}"
+              f" · cited {w.get('cited_by_count', 0)} · {w.get('doi') or w['id']}")
+        print("authors: " + (", ".join(authors[:8]) + (f" … (+{len(authors) - 8})" if len(authors) > 8 else "") or "unknown"))
+        funders = [f.get("display_name", "") for f in w.get("funders") or []]
+        print("funders: " + (", ".join(funders) if funders else "none recorded (read the paper's acknowledgements)"))
+        print("copies (fetch the published version where you can):")
+        for url, ver, st, oa in _copies(w) or [("none listed", "", "", "")]:
+            print(f"  - {url}  [{ver}, {st}, {oa}]")
+        ab = _abstract(w)
+        print("abstract: " + (ab[:1500] + (" …" if len(ab) > 1500 else "") if ab else "none in OpenAlex"))
+        return
+    filters = []
+    if a.since:
+        filters.append(f"publication_year:>{a.since - 1}")
+    if a.reviews:
+        filters.append("type:review")
+    if a.open:
+        filters.append("is_oa:true")
+    params = {"search": q, "per-page": a.max,
+              "select": "id,doi,display_name,publication_year,type,cited_by_count,is_retracted,"
+                        "primary_location,locations"}
+    if filters:
+        params["filter"] = ",".join(filters)
+    res = _openalex("/works", params)
+    print(f"{res['meta']['count']} work(s) for '{q}', {len(res['results'])} shown")
+    for w in res["results"]:
+        venue = ((w.get("primary_location") or {}).get("source") or {}).get("display_name", "no venue")
+        doi = (w.get("doi") or "").replace("https://doi.org/", "") or w["id"].rsplit("/", 1)[-1]
+        opens = [f"{u} [{v}]" for u, v, _, oa in _copies(w) if oa == "open"]
+        print(f"- {w.get('publication_year')} · {_work_kind(w)} · cited {w.get('cited_by_count', 0)} · {venue} · {doi}\n"
+              f"  {w['display_name']}\n  open copy: {opens[0] if opens else 'none listed'}")
+
+
+# ---------- data scripts (statistics through a Python library: sistat, wbgapi, sdmx1, …) ----------
+
+_DEPS = re.compile(r"^# /// script$(.*?)^# ///$", re.S | re.M)
+
+
+def _script_deps(text):
+    block = _DEPS.search(text)
+    if not block:
+        return None
+    body = "\n".join(ln[2:] if ln.startswith("# ") else ln.lstrip("#") for ln in block.group(1).splitlines())
+    m = re.search(r"dependencies\s*=\s*\[(.*?)\]", body, re.S)
+    return re.findall(r"[\"']([^\"']+)[\"']", m.group(1)) if m else []
+
+
+def _run_data_script(script):
+    """Run a PEP 723 script with uv; its last stdout line is {"title", "url", "rows": [{col: value}, …]}."""
+    r = subprocess.run(["uv", "run", "--quiet", "--script", str(script)], capture_output=True, text=True, timeout=900)
+    if r.returncode != 0:
+        raise RuntimeError(f"script failed: {(r.stderr or r.stdout).strip()[-600:]}")
+    last = next((ln for ln in reversed(r.stdout.splitlines()) if ln.strip()), "")
+    try:
+        out = json.loads(last)
+    except json.JSONDecodeError:
+        raise RuntimeError("the script's last line of output is not JSON: end it with "
+                           "print(json.dumps({'title': …, 'url': …, 'rows': rows}, ensure_ascii=False))")
+    rows = out.get("rows") if isinstance(out, dict) else None
+    if not rows or not isinstance(rows, list) or not all(isinstance(x, dict) for x in rows):
+        raise RuntimeError("the JSON needs 'rows': a non-empty list of objects, one per data row")
+    if not str(out.get("url", "")).startswith("http"):
+        raise RuntimeError("the JSON needs 'url': the dataset's public page or API query URL (http…)")
+    return out, last
+
+
+def _data_rows(rows):
+    """Records -> header line + one self-describing paragraph per row, as pxweb fetch writes them."""
+    head = list(dict.fromkeys(k for row in rows for k in row))
+
+    def fmt(v):
+        if v is None or (isinstance(v, float) and v != v):
+            return ""
+        return format(v, "g") if isinstance(v, float) and v.is_integer() and abs(v) < 1e15 else str(v)
+    return [" | ".join(head)] + [" | ".join(f"{k}: {fmt(row.get(k))}" for k in head) for row in rows]
+
+
+def cmd_data(a):
+    folder, script = Path(a.folder), Path(a.script).resolve()
+    if not script.exists():
+        sys.exit(f"no script {a.script}")
+    text = script.read_text(encoding="utf-8")
+    deps = _script_deps(text)
+    if deps is None:
+        sys.exit("the script needs a `# /// script` block listing its dependencies (see reference/statistics.md)")
+    loose = [d for d in deps if "==" not in d]
+    if loose:
+        sys.exit(f"pin every dependency to an exact version, so the Audit re-runs the same code: {', '.join(loose)}")
+    dest = folder / "evidence" / "files" / "data"
+    dest.mkdir(parents=True, exist_ok=True)
+    kept = dest / script.name
+    if kept.resolve() != script:
+        if kept.exists() and kept.read_text(encoding="utf-8") != text:
+            sys.exit(f"{kept.relative_to(folder)} exists with other code: rename your script")
+        kept.write_text(text, encoding="utf-8")
+    txt, meta = kept.with_suffix(".txt"), kept.with_suffix(".json")
+    if txt.exists() and meta.exists() and not a.refresh and \
+            json.loads(meta.read_text(encoding="utf-8")).get("script_sha256") == hashlib.sha256(text.encode()).hexdigest():
+        info = json.loads(meta.read_text(encoding="utf-8"))
+    else:
+        try:
+            out, raw = _run_data_script(kept)
+        except (RuntimeError, subprocess.TimeoutExpired) as e:
+            print(f"FAILED: {e}")
+            sys.exit(1)
+        paras = _data_rows(out["rows"])
+        txt.write_text("\n".join(paras) + "\n", encoding="utf-8")
+        info = {"url": out["url"], "fetched": datetime.date.today().isoformat(), "content_type": "application/json",
+                "kind": "data", "title": out.get("title", ""), "script": str(kept.relative_to(folder)),
+                "script_sha256": hashlib.sha256(text.encode()).hexdigest(),
+                "sha256": hashlib.sha256(raw.encode()).hexdigest(), "bytes": len(raw.encode()),
+                "paragraphs": len(paras), "tls_unverified": False}
+        meta.write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"cached: {txt.relative_to(folder)}  [data, {info['paragraphs'] - 1} rows]  {info['title']}  <{info['url']}>")
+    lines = txt.read_text(encoding="utf-8").splitlines()
+    for i, ln in enumerate(lines[:a.max + 1], 1):
+        print(f"L{i}: {ln[:300]}")
+    if len(lines) > a.max + 1:
+        print(f"… {len(lines) - a.max - 1} more rows; read them with show, or narrow the selection.")
+
+
 def cmd_search(a):
     _, lines = load_lines(a.file)
     print_hits(lines, a.keywords, a.max)
@@ -627,9 +887,13 @@ def cmd_verify(a):
                 rendered = bool(src) and src.endswith("-rendered.txt")
                 with tempfile.TemporaryDirectory() as td:
                     pmeta = (folder / src).with_suffix(".json") if src else None
-                    pq = json.loads(pmeta.read_text(encoding="utf-8")).get("post_query") if pmeta and pmeta.exists() else None
+                    pinfo = json.loads(pmeta.read_text(encoding="utf-8")) if pmeta and pmeta.exists() else {}
+                    pq, pscript = pinfo.get("post_query"), pinfo.get("script")
                     insecure = False
-                    if pq:
+                    if pscript:
+                        paras = _data_rows(_run_data_script(folder / pscript)[0]["rows"])
+                        note.append("re-ran script")
+                    elif pq:
                         raw, ctype = _px_json(url, pq)
                         paras = _px_rows(raw, ctype)
                         note.append("re-queried")
@@ -638,7 +902,7 @@ def cmd_verify(a):
                         note.append("re-rendered")
                     else:
                         raw, ctype, insecure = _get(url)
-                    if not pq:
+                    if not (pq or pscript):
                         paras, _, _ = to_paragraphs(raw, ctype, td)
                 live = match_quality(quote, norm(" ".join(paras)))
                 if insecure:
@@ -680,6 +944,22 @@ def main():
     p.add_argument("--max", type=int, default=20, help="tables or rows to print (default 20)")
     p.add_argument("--refresh", action="store_true")
     p.set_defaults(fn=cmd_pxweb)
+
+    p = sub.add_parser("papers", help="find research papers in OpenAlex, or look one up by DOI")
+    p.add_argument("words", nargs="*", help="search words, or one DOI / OpenAlex id for the paper's details")
+    p.add_argument("--check", action="store_true", help="only say whether OPENALEX_API_KEY is set")
+    p.add_argument("--since", type=int, help="published in this year or later")
+    p.add_argument("--reviews", action="store_true", help="only reviews (systematic reviews, meta-analyses, surveys)")
+    p.add_argument("--open", action="store_true", help="only papers with an open-access copy")
+    p.add_argument("--max", type=int, default=10, help="papers to list (default 10)")
+    p.set_defaults(fn=cmd_papers)
+
+    p = sub.add_parser("data", help="run a pinned stats script (sistat, wbgapi, sdmx1 …) and cache its rows as text")
+    p.add_argument("folder")
+    p.add_argument("script", help="PEP 723 script; its last output line is JSON {title, url, rows}")
+    p.add_argument("--max", type=int, default=20, help="rows to print (default 20)")
+    p.add_argument("--refresh", action="store_true", help="re-run even if the script is unchanged")
+    p.set_defaults(fn=cmd_data)
 
     p = sub.add_parser("search", help="keyword hits in a cached/local file")
     p.add_argument("file")

@@ -64,12 +64,13 @@ The user may give a Motion, a link or a question. They may add `quick`, which sk
 4. **User files and Primary Text.** Put every file the user gives you in `sources/`, unchanged: if their files are loose in `<project>`, move them in and say so. Never edit, rename or copy a file inside `sources/`. Extract each one's text with `scripts/evidence.py import <folder> sources/<file> --name <short-slug>`, which writes `evidence/files/user-<slug>.txt` and records the original as the source's url. List each original with its extract under "Sources the user supplied" in `motion.md`. If the Motion concerns a specific document, cache it with `scripts/evidence.py fetch`, or import the user's copy. Then record its operative provisions as `E-PRIMARY-001` with `evidence.py quote`. Advocates search the cached text themselves. If you can't fetch it, ask the user for it.
 5. **Dimensions.** Propose them: the document's provisions, or cross-cutting themes such as cost, legality or health effects. Let the user confirm or edit the list.
 6. **Write the folder.**
-   - `motion.md`, from `templates/motion.md`. Include Source Tier examples for this domain. Put each kind of document in exactly one tier, and cover every kind the debate is likely to quote: the government and its ministries, the proposers' own bill and memorandum, courts including dissenting opinions. The Report language is English unless the user asks for another. It is the language of every case file and the Report; quotes stay in their source's language.
+   - `motion.md`, from `templates/motion.md`. Include Source Tier examples for this domain. Put each kind of document in exactly one tier, and cover every kind the debate is likely to quote: the government and its ministries, the proposers' own bill and memorandum, courts including dissenting opinions, and research papers (peer-reviewed in A, preprints and working papers in B, those funded by an interested party in C). The Report language is English unless the user asks for another. It is the language of every case file and the Report; quotes stay in their source's language.
    - `state.md`, from `templates/state.md`. In quick mode, mark Rejoinder and Rejoinder Audit `skipped`. With `no-confrontation`, set `- Confrontation: off` and mark Stage 6 `skipped`.
    - `agent/evidence/`, and the empty `outputs/`
    - `README.md` from `templates/project-readme.md` and `CLAUDE.md` from `templates/project-claude.md`, in `<project>`. Fill in every placeholder, with `<skill dir>` as its absolute path, and drop the parts that don't apply (groups, translation, quick mode). Status is "in progress", and the Report rows say "not written yet (Stage 5)". If either file already exists and isn't one of these, leave it and add the template's text under its own heading at the end.
 7. **Groups.** With more than about six Dimensions, split them into groups (A, B, …) of related Dimensions. Each group gets its own Advocate per Side. Record the groups in `state.md`.
-8. Mark Framing `done`, then tell the user the debate is starting and roughly how many subagent runs it will take.
+8. **Paper search.** Run `python3 <skill dir>/scripts/evidence.py papers --check`. If it prints a `WARNING` (no key, or little of today's budget left), pass it on to the user before the debate starts. The debate can go on without the key, but paper searches may run out partway through.
+9. Mark Framing `done`, then tell the user the debate is starting and roughly how many subagent runs it will take.
 
 ## Dispatching
 
@@ -147,8 +148,9 @@ After every Stage, in this order:
    - Put what the user supplies in `sources/` (pasted text as a `.txt` file there), `import` it, save it as `E-USER-NNN`, and mark the request `fulfilled` with that ID, or `partial` with a `Still missing:` sentence when it covers only part.
    - If the user can't get something, mark it `unavailable`.
    - The debate goes on either way: pending Claims stay pending, and the Report shows them as unsupported.
-4. **State.** Mark the Stage `done`, and log anything you reran or skipped.
-5. **Checkpoint.** Give the user a short progress note and name the next Stage with its number of dispatches. Then wait: dispatch the next Stage only when the user says to continue. After Judgment, skip the checkpoint and go straight on to Stage 6.
+4. **Tool warnings.** If an Advocate's reply quotes a `WARNING` from `papers` (no OpenAlex key, a low or used-up budget, a refused key), pass it on to the user in the checkpoint. A used-up budget resets at midnight UTC; the debate goes on, with papers found through WebSearch until then.
+5. **State.** Mark the Stage `done`, and log anything you reran or skipped.
+6. **Checkpoint.** Give the user a short progress note and name the next Stage with its number of dispatches. Then wait: dispatch the next Stage only when the user says to continue. After Judgment, skip the checkpoint and go straight on to Stage 6.
 
 ## Finish
 
