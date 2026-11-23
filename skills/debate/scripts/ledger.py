@@ -23,7 +23,8 @@ Writes <debate-folder>/ledger.md and prints problems to stdout, one per line:
               more than 3, cites Evidence that is missing, failed the Audit or isn't cited by what it
               paraphrases, breaks the turn format or order, or misses a Dimension; or a
               confrontation-<lang>.md doesn't mirror it
-Exit code 0 always; problems are for the orchestrator to act on.
+Exit code 0 after a run; problems are for the orchestrator to act on. Exit code 2, with nothing
+written, when the argument is missing or the folder has no evidence/.
 """
 import re
 import sys
@@ -314,9 +315,18 @@ def check_confrontation(folder, outdir, evidence):
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print(__doc__)
+        return
+    if len(sys.argv) != 2:
+        print("Usage: python3 ledger.py <debate-folder>", file=sys.stderr)
+        sys.exit(2)
     folder = Path(sys.argv[1])
     folder = folder / "agent" if (folder / "agent").is_dir() else folder  # a project folder, or its agent/
     ev_dir = folder / "evidence"
+    if not ev_dir.is_dir():
+        print(f"{folder} is not a debate folder: it has no evidence/", file=sys.stderr)
+        sys.exit(2)
     evidence = {}
     for f in sorted(ev_dir.glob("E-*.md")) if ev_dir.exists() else []:
         text = f.read_text(encoding="utf-8")
