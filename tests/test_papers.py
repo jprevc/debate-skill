@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import unittest
+import urllib.parse
 import urllib.error
 from unittest import mock
 from pathlib import Path
@@ -86,9 +87,10 @@ class Reply:
 SEARCH = {"meta": {"count": 0}, "results": []}
 
 
-def papers(*argv, key="k"):
+def papers(*argv, key="k", **opts):
     """Run papers with OpenAlex mocked; return (stdout, exit code)."""
-    a = mock.Mock(words=list(argv), check=False, since=None, reviews=False, open=False, max=1)
+    a = mock.Mock(**{"words": list(argv), "check": False, "since": None, "reviews": False, "open": False, "max": 1,
+                     **opts})
     out, code = io.StringIO(), 0
     env = {"OPENALEX_API_KEY": key} if key else {}
     with mock.patch.dict(os.environ, env, clear=True), contextlib.redirect_stdout(out):
@@ -140,6 +142,20 @@ class Budget(unittest.TestCase):
             evidence.cmd_papers(a)
         self.assertEqual(out.getvalue(), "OPENALEX_API_KEY is set: 75% of today's budget left, about 750 searches; "
                                          "it resets in about 10 h.\n")
+
+
+class Reviews(unittest.TestCase):
+    """--reviews ranks by the topic and asks for a review word in the title, whatever the work's type:
+    economics meta-analyses are typed 'article', and type:review is mostly medicine."""
+
+    def test_reviews_filter_on_the_title_not_the_type(self):
+        with mock.patch("urllib.request.urlopen", return_value=Reply(SEARCH, {})) as m:
+            papers("minimum", "wage", "employment", reviews=True)
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(m.call_args[0][0].full_url).query)
+        self.assertEqual(q["search"], ["minimum wage employment"])
+        self.assertNotIn("type:review", q["filter"][0])
+        self.assertIn("title.search:(review OR ", q["filter"][0])
+        self.assertIn("meta-analysis", q["filter"][0])
 
 
 if __name__ == "__main__":
