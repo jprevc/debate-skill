@@ -5,7 +5,8 @@ Usage: python3 ledger.py <debate-folder>
 
 Writes <debate-folder>/ledger.md and prints problems to stdout, one per line:
   DANGLING    a case file cites an Evidence ID that has no file (possible fabrication)
-  UNCITED     an Evidence file no Claim or response cites
+  UNCITED     an Evidence file no Claim or response cites (case files archived in history/<N>/ by a
+              revision count as citing; they are not checked otherwise)
   SECTION     a case file lacks a required template heading (headings stay in English)
   BADCLAIM    a Claim line breaks the format in reference/evidence.md, names an unknown
               Dimension, uses another prefix, or lacks the Evidence its type needs
@@ -322,11 +323,13 @@ def main():
         evidence[f.stem] = (frontmatter(text), text)
 
     cited_by = {}  # evidence id -> set of case files
-    for f in sorted(folder.glob("*.md")):
+    # a revision archives the case files it replaces in history/<N>/; the earlier Report still cites their Evidence
+    for f in sorted(folder.glob("*.md")) + sorted(folder.glob("history/*/*.md")):
         if not CASE_RE.match(f.name):
             continue
+        name = f.relative_to(folder).with_suffix("").as_posix()
         for eid in ID_RE.findall(f.read_text(encoding="utf-8")):
-            cited_by.setdefault(eid, set()).add(f.stem)
+            cited_by.setdefault(eid, set()).add(name)
 
     rows = []
     for eid, (fm, text) in evidence.items():

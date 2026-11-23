@@ -20,6 +20,7 @@ One debate per project folder, which keeps what the user supplied apart from wha
   sources/    the user's own files, exactly as they gave them; agents never write here
   agent/      the debate record, everything the agents made
   outputs/    report.md  report.html  confrontation.md  (report-<lang>.*  confrontation-<lang>.md for a Translated Report)
+              history/<N>/   the outputs a Revision replaced
 ```
 
 - `<project>` is the folder the user names, or the directory they invoked the skill from when it is empty or holds only their documents for this Motion. Otherwise create `<project>` there as `<motion-slug>/`, and tell the user. It is never `<skill dir>`. Folder names carry no date: the date is in `state.md`.
@@ -36,6 +37,8 @@ agent/
   3-audit-batch-<N>.md  3-audit.md
   confrontation-check.md                the Checker's findings on the Confrontation
   figures-<lang>.json  motion-<lang>.md   only for a Translated Report
+  revision-<N>-verify.md                the live check of every Evidence at the start of Revision N
+  history/<N>/                          the case files and Stage 6 files that Revision N replaced
 ```
 
 ## Start or resume
@@ -48,6 +51,7 @@ The user may give a Motion, a link or a question. They may add `quick`, which sk
   - `pending`: run the Stage.
   - If the Evidence Requests table in `state.md` has no `Needed`, `Tried`, `Where` and `Effort` columns (a debate from before they existed), add them first, and fill every row from the request blocks in the case files and from the log, by the rules in Between Stages step 3. Do this before running a Stage or rebuilding the Report, even for a finished debate.
   - A `state.md` from before Stage 6 existed has no Confrontation row. Add the row as `pending` and the line `- Confrontation: on`, and log it, so resuming a finished debate gives it a Confrontation.
+  - If every Stage is `done` or `skipped`, the debate is finished. Tell the user when it finished, then ask whether to **revise** it (see Revision), or to start over in a new folder. Starting over is for a Motion or Dimensions that were framed wrongly; anything else is a Revision.
 - Otherwise run Framing.
 
 ## Stage 0: Framing
@@ -103,7 +107,7 @@ Mark each Stage `running` in `state.md` when you dispatch it, `outputs-done` whe
 | **1 Opening Case** | `advocate.md`, `Stage: opening`, `Output file: 1-opening-<prefix>.md` | none |
 | **2 Rebuttal** | `advocate.md`, `Stage: rebuttal`, `Output file: 2-rebuttal-<prefix>.md` | the opposing group's `1-opening-*` |
 | **3 Evidence Audit** | `auditor.md`, one dispatch per batch of about 20 Evidence IDs | n/a |
-| **4 Rejoinder** | `advocate.md`, `Stage: rejoinder`, `Output file: 4-rejoinder-<prefix>.md` | the opposing group's `2-rebuttal-*` |
+| **4 Rejoinder** | `advocate.md`, `Stage: rejoinder`, `Output file: 4-rejoinder-<prefix>.md`; in a Revision, also `Revision:` and `Earlier file:` | the opposing group's `2-rebuttal-*` |
 | **4a Rejoinder Audit** | `auditor.md`, for Evidence created since the Audit, including new `E-USER-*` | n/a |
 | **5 Judgment** | `judge.md`, with Folder and Skill dir only | n/a |
 | **6 Confrontation** | `editor.md` and `checker.md`, in the loop below | n/a |
@@ -160,7 +164,26 @@ When Stage 6 is done or skipped, update `README.md`: the status line ("finished"
 - the Judge's three-line summary of the main cruxes
 - every Evidence Request still unmet (`open`, `partial` or `unavailable`), each with its status; `outputs/report.html` lists them too, with what was tried
 
-If the user later supplies Evidence for one of those, add it and rerun from Stage 4a. That means a short audit, then a new Judgment and a new Confrontation.
+If the user later supplies Evidence for one of those, add it and rerun from Stage 4a. That means a short audit, then a new Judgment and a new Confrontation. Anything bigger is a Revision.
+
+## Revision
+
+A Revision brings a finished debate up to date in its own folder, instead of a new debate: the Advocates of the affected groups rewrite their Rejoinders with what has changed, the new Evidence is audited, and the Judge writes a new Report that says what changed. The Opening Cases, the Rebuttals, the earlier Evidence and its Audit stay. `N` is the Revision's number: 1 for the first, then one more than the `- Revision:` line in `state.md`.
+
+1. **What changed.** Ask the user, in one message:
+   - what is new: the skill (new tools or rules; read `git log` in `<skill dir>` since the `Created` date, or the last Revision's date, for what), sources they supply, events since the last run (a court decision, an official analysis, new figures, a changed date), or a Dimension they want argued better
+   - which groups it touches. Propose the groups yourself from what changed, and let the user confirm.
+
+   Put supplied files in `sources/` and `import` them as in Framing. List each under "Sources the user supplied" in `motion.md`. Add a Dimension the user asks for to `motion.md` as at Between Stages step 2, and give it to a group.
+2. **Recheck the record.** Run `python3 <skill dir>/scripts/evidence.py verify <folder> --live > <folder>/revision-<N>-verify.md`. It can take a few minutes. Every Evidence whose live source shows `partial`, `missing` or `unreachable` goes into the Revision's Audit, and the Advocates read the list.
+3. **Archive.** Move into `agent/history/<N>/`: the affected groups' `4-rejoinder-*.md`, `confrontation-check.md`, and `figures*.json`. Move everything in `outputs/` except `history/` into `outputs/history/<N>/`, then fix its links to the record, which is now three levels up: `sed -i 's#\.\./agent/#../../../agent/#g' outputs/history/<N>/*.md outputs/history/<N>/*.html`. The archived `report.html` still opens offline. Never move or delete Evidence: `ledger.py` counts the archived case files as citing.
+4. **State.** In `state.md`, set `- Revision: <N> (<date>)` (add the line under `Created` if it is missing), set Stages 4, 4a, 5 and 6 to `pending` (6 stays `skipped` with `Confrontation: off`), and log the Revision: its number, the date, what changed, the affected groups, and what you archived. A quick debate gets its Rejoinder now: set `- Mode: full`.
+5. **Run Stages 4 to 6** as usual, with these differences:
+   - Stage 4 dispatches only the affected groups. Add two lines to each dispatch: `Revision: <N> — <what changed, in one or two neutral sentences, nothing about the user's leanings>` and `Earlier file: history/<N>/4-rejoinder-<prefix>.md` (leave it out when the debate had no Rejoinder). The other groups' Rejoinders stand.
+   - Stage 4a audits every Evidence that no `3-audit-batch-*.md` lists, plus the Evidence from step 2. Batch numbers continue from the highest one.
+   - Add `Revision: <N>` to the Judge's dispatch.
+   - Checkpoints and Between Stages run as usual.
+6. **Finish** as usual. In `README.md`, the status says "revised (Revision N, YYYY-MM-DD)", and a line under "Start here" points to `outputs/history/` for the earlier Reports. If the debate has a Translated Report, translate the new Report as in Translated Report.
 
 ## Translated Report
 

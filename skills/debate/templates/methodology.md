@@ -24,6 +24,8 @@ This Report was produced by a fixed procedure for structured debate. Every role 
 
 <In quick mode, leave out steps 4 and 5 and say: "This was a quick debate: the Rejoinder and its Audit were skipped.">
 
+<After a Revision, add: "The debate was first completed on <date> and revised on <date(s)>. In each Revision, the Advocates of the affected groups rewrote their Rejoinders with <what changed>, the new Evidence and any Evidence whose source had changed were audited, and the Judge wrote this Report anew. The earlier Reports are kept in `outputs/history/`.">
+
 **Evidence Requests.** When an Advocate could not obtain a document, it filed an Evidence Request. Some could be met later. The Report treats Claims that rest on unmet requests as unsupported.
 
 **What this Report is and is not.** The Report is a map of the disputed questions. It does not recommend a decision.
