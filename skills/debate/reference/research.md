@@ -9,11 +9,11 @@ python3 <skill dir>/scripts/evidence.py papers <words …> [--since YEAR] [--rev
 python3 <skill dir>/scripts/evidence.py papers <DOI>          # one paper: type, retraction, authors, funders, copies, abstract
 ```
 
-`papers` searches OpenAlex, an open index of scholarly works. Each hit shows its year, type, citation count, venue and DOI, and whether a free copy exists. Write the search words in English, the language most research is indexed in. Add the country's name when the setting matters (`minimum wage employment Slovenia`). WebSearch and Google Scholar find papers too: look each one up with `papers <DOI>` before you cite it. Each search spends some of a daily budget; a DOI lookup is free. `papers` prints a `WARNING` when there is no `OPENALEX_API_KEY`, when the budget runs low, and when it is used up. Report every warning in your reply. Once the budget is used up, find papers with WebSearch and Google Scholar, and fetch them as usual.
+`papers` searches OpenAlex, an open index of scholarly works. Each hit shows its year, type, citation count, venue and DOI, and whether a free copy exists. Write the search words in English, the language most research is indexed in, and spell out acronyms (`value added tax`, not `VAT`, which also names a medical term). Add the country's name when the setting matters (`minimum wage employment Slovenia`). WebSearch and Google Scholar find papers too: look each one up with `papers <DOI>` before you cite it. Each search spends some of a daily budget; a DOI lookup is free. `papers` prints a `WARNING` when there is no `OPENALEX_API_KEY`, when the budget runs low, and when it is used up. Report every warning in your reply. Once the budget is used up, find papers with WebSearch and Google Scholar, and fetch them as usual.
 
 Look for the strongest kind of evidence first:
 
-1. A **systematic review or meta-analysis** pools many studies, so one cherry-picked study can't outweigh it. Use `--reviews`.
+1. A **systematic review or meta-analysis** pools many studies, so one cherry-picked study can't outweigh it. `--reviews` keeps works with a review word in the title (review, meta-analysis, meta-regression, survey, synthesis), whatever their type, since economics journals list meta-analyses as articles. The search ranks by topic, not by fit: read each title, and when no review covers the Claim's question, go on to single studies.
 2. A **peer-reviewed study** in a journal.
 3. A **preprint or working paper** (type `preprint`, from arXiv, SSRN, NBER, RePEc and the like) has not been peer-reviewed yet. Cite it when it is the newest or the only work on the question, and say in the Claim that it is a preprint.
 

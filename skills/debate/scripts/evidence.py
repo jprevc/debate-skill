@@ -475,6 +475,9 @@ def _pxweb(a):
 OPENALEX = "https://api.openalex.org"
 
 
+REVIEW_WORDS = 'review OR meta-analysis OR "meta analysis" OR meta-regression OR survey OR synthesis'
+
+
 class BudgetSpent(Exception):
     """OpenAlex's daily budget (the key's, or the network's shared one without a key) is used up."""
 
@@ -619,8 +622,8 @@ def _papers(a):
     filters = []
     if a.since:
         filters.append(f"publication_year:>{a.since - 1}")
-    if a.reviews:
-        filters.append("type:review")
+    if a.reviews:  # by title, not type:review: economics reviews are typed "article", and type:review is mostly medicine
+        filters += [f"title.search:({REVIEW_WORDS})", "type:!dataset", "type:!book-review"]
     if a.open:
         filters.append("is_oa:true")
     params = {"search": q, "per-page": a.max,
@@ -949,7 +952,7 @@ def main():
     p.add_argument("words", nargs="*", help="search words, or one DOI / OpenAlex id for the paper's details")
     p.add_argument("--check", action="store_true", help="only say whether OPENALEX_API_KEY is set")
     p.add_argument("--since", type=int, help="published in this year or later")
-    p.add_argument("--reviews", action="store_true", help="only reviews (systematic reviews, meta-analyses, surveys)")
+    p.add_argument("--reviews", action="store_true", help="only reviews: a review, meta-analysis, meta-regression, survey or synthesis in the title")
     p.add_argument("--open", action="store_true", help="only papers with an open-access copy")
     p.add_argument("--max", type=int, default=10, help="papers to list (default 10)")
     p.set_defaults(fn=cmd_papers)
