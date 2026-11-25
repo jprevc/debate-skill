@@ -1,6 +1,6 @@
 """Numbers in prose, read the way an English or Slovenian writer means them, and matched against the numbers
-in the Evidence a sentence cites. Used by report_html.py and short_html.py (the NUMBER check) and by
-evidence.py calc.
+in the Evidence a sentence cites. Used by report_html.py and short_html.py (the NUMBER check of the Report's
+prose and of the figure values in figures.json) and by evidence.py calc.
 
 A number in the Report matches a number in an Evidence file when they are the same quantity once the scale
 word ("million", "mio", "milijard" …) is applied, and the Evidence's number rounds to the Report's number at
@@ -129,6 +129,31 @@ def evidence_numbers(text, translation=True):
     """Every number in an Evidence file's Quote and Context (both verbatim from the source), and its Translation."""
     names = ("Quote", "Context") + (("Translation",) if translation else ())
     return [n for name in names for n in numbers(section(text, name), quantities_only=False)]
+
+
+# a figure in a share or rate unit may give 0.37 for the Evidence's 37 %, or 37 for its 0.37. Other units get no
+# such factor: a scale word converts exactly ("17,9 tisoč" is 17900), and a bare factor of 100 or 1000 lets a
+# figure's 6400 or 48000 pass on any "64" or "48" in the Evidence.
+RATE_UNIT = re.compile(r"%|percent|per cent|share|rate|ratio|fraction|odstot|delež|stopnj", re.I)
+
+
+def unit_scale(unit):
+    """The scale word in a figure's unit ("EUR million" → 10**6), or 1."""
+    for m in re.finditer(r"\b(?=\w)", unit or ""):
+        for rx, mult in SCALES:
+            if rx.match(unit, m.start()):
+                return mult
+    return Decimal(1)
+
+
+def value_matches(v, unit, pool):
+    """Whether a figure value (a JSON number in the figure's unit, such as "EUR million") is one of the Nums in
+    pool, rounded to the value's precision; a share may be a percentage (see RATE_UNIT)."""
+    d = Decimal(str(v))
+    vals = {(abs(d), max(0, -d.as_tuple().exponent))}
+    base = unit_scale(unit)
+    factors = (1, Decimal(100), Decimal("0.01")) if RATE_UNIT.search(unit or "") else (1,)
+    return any(matches(Num(str(v), 0, vals, base * k), pool) for k in factors)
 
 
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-ZČŠŽ(\"“„»*])")

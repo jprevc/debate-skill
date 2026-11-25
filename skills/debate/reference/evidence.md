@@ -62,7 +62,7 @@ python3 <skill dir>/scripts/evidence.py calc <folder> "E-CON-B-040:5159.12 / (1 
 - `--method` says what each input is and why the formula combines them that way: the same year, unit and population, or how they differ. The Auditor checks exactly that.
 - A Claim that rests on a calc is an Inference: cite the calc, and the Evidence of the inputs where the Claim uses their meaning.
 
-The Report is checked the same way: `report_html.py` prints a `NUMBER` line for every number in a sentence that none of the sentence's Evidence states, even rounded. A number you computed without a calc ends up as one of those lines.
+The Report is checked the same way: `report_html.py` prints a `NUMBER` line for every number in a sentence that none of the sentence's Evidence states, even rounded, and a `FIGURE` line for every value in `figures.json` that none of its Evidence states. A number you computed without a calc ends up as one of those lines.
 
 ## Source Tiers
 

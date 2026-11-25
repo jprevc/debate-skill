@@ -165,7 +165,7 @@ When Stage 6 is done or skipped, update `README.md`: the status line ("finished"
 - the paths to `outputs/report.html` (the Report with charts and the Confrontation tab; it opens offline in a browser), `outputs/report.md` and `outputs/confrontation.md`
 - any Confrontation issue the Checker still reported after round 2; with `no-confrontation`, one line saying the Confrontation was skipped and that resuming the debate adds it
 - the Judge's three-line summary of the main cruxes
-- any `NUMBER` line the Judge left, with its reason
+- any `NUMBER` or `FIGURE … computed` line the Judge left, with its reason
 - every Evidence Request still unmet (`open`, `partial` or `unavailable`), each with its status; `outputs/report.html` lists them too, with what was tried
 
 Then offer a Short Report in one line: a one-page version of the Report with the detail a click away (see Short Report).

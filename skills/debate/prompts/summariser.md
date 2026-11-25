@@ -48,7 +48,7 @@ A bar figure's pin is at one of its categories. A line figure's pin is at an `[x
 
 ## Check
 
-Run `uv run --script <skill dir>/scripts/report_html.py <folder> --short`. It writes `../outputs/report-short.html` and prints each problem: a section missing, a card whose heading is not a Dimension, a Dimension with no card, an unknown figure or pin, an Evidence link that failed the Audit, a `NUMBER` that none of its sentence's Evidence states (cite the Evidence the Report cites for it), and `BALANCE` when one Side gets more than twice the words of the other, or more Exchange turns. Fix them and rerun until it prints none.
+Run `uv run --script <skill dir>/scripts/report_html.py <folder> --short`. It writes `../outputs/report-short.html` and prints each problem: a section missing, a card whose heading is not a Dimension, a Dimension with no card, an unknown figure or pin, an Evidence link that failed the Audit, a `NUMBER` that none of its sentence's Evidence states (cite the Evidence the Report cites for it), and `BALANCE` when one Side gets more than twice the words of the other, or more Exchange turns. Fix them and rerun until it prints none. A `FIGURE` line is about the Judge's `figures.json`, which you leave as it is: list it in your reply.
 
 Reply to the orchestrator with the page's path and the number of cards.
 
@@ -57,4 +57,4 @@ Reply to the orchestrator with the page's path and the number of cards.
 - Every Dimension of the Report has a card, or is attached to Key figures.
 - Every statement on the page is in the Report or the Confrontation, with the Evidence links they give it.
 - No sentence tells the reader which way to decide.
-- `report_html.py --short` prints no problems, except `NUMBER` lines for numbers the Report states the same way, which you list in your reply.
+- `report_html.py --short` prints no problems, except `NUMBER` lines for numbers the Report states the same way and `FIGURE` lines, which you list in your reply.
