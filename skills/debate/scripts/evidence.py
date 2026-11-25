@@ -1580,7 +1580,7 @@ def _apply(body, law):
     body = re.sub(r"^V Zakonu o [^(]*\((?:[^()]|\([^()]*\))*\) ", "", body)  # the act's citation in the first article
     text, quotes = _quoted(body)
     sentences = [s.strip() for s in re.split(r"(?<=[.⟧])\s+(?=[A-ZČŠŽ0-9])", text) if s.strip()]
-    changes, work, checks, cur = {}, {}, [], None
+    changes, work, checks, cur = {}, {}, {}, None
 
     def article(num):
         if num not in law:
@@ -1621,7 +1621,7 @@ def _apply(body, law):
         if m:
             scope, s = art.index(_ordinal(m[1])), s[m.end():]
             if m[2]:
-                checks.append((_ordinal(m[1]), _ordinal(m[2])))
+                checks.setdefault(cur, []).append((_ordinal(m[1]), _ordinal(m[2])))
         elif m := re.match(r"^(?:se )?v besedilu člena, ki se označi kot prvi odstavek,? ", s, re.I):
             if len(art.paras) != 1 or art.paras[0]["numbered"]:
                 raise Unparsed("the article is not one unnumbered paragraph")
@@ -1676,11 +1676,11 @@ def _apply(body, law):
             olds, news = _ordinals(m[1]), _ordinals(m[2])
             if len(olds) != len(news):
                 raise Unparsed(f"can't read the renumbering: {s[:80]}")
-            checks += zip(olds, news)
+            checks.setdefault(cur, []).extend(zip(olds, news))
             continue
         raise Unparsed(f"phrasing not handled: {s[:100]}")
     for num, art in work.items():
-        for old, new in checks:  # the bill states the new numbers: they must agree with the changes worked out
+        for old, new in checks.get(num, []):  # the bill states the new numbers: they must agree with the changes worked out
             got = art.new_number(old)
             if got != new:
                 raise Unparsed(f"the bill makes the old {_nth(old)} paragraph the {_nth(new)}, lawdiff "
@@ -1721,7 +1721,7 @@ def cmd_lawdiff(a):
             changes = _apply(body, law)
         except Unparsed as e:
             text, _ = _quoted(re.sub(r"^V Zakonu o [^(]*\((?:[^()]|\([^()]*\))*\) ", "", _one_line(body)))
-            ref = re.search(rf"({ART}) člen", text)
+            ref = re.search(rf"\bv ({ART}) členu\b", text, re.I) or re.search(rf"({ART}) člen", text)
             target = ref[1] if ref else "?"
             out_lines += [f"== {target} člen {law_abbr}, amended by {by}: unparsed ({e})",
                           f"current article: {target} člen {law_abbr} in force",
