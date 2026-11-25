@@ -3,7 +3,8 @@
 
 Subcommands (run with -h for options):
   fetch  <folder> <url> [keyword ...]   download page/PDF -> cached text in evidence/files/web/, print keyword hits
-                                        (--render: load it in headless Chromium first, for JavaScript sites)
+                                        (--render: load it in headless Chromium first, for JavaScript sites;
+                                         --archive: the latest Wayback Machine snapshot, for a site that is down)
   pxweb  search|meta|fetch ...          statistical tables via the PxWeb API (SiStat by default)
   papers <words ...> | <DOI>            research papers via OpenAlex: search, or one paper's type, retraction,
                                         funders and open copies (OPENALEX_API_KEY optional)
@@ -15,12 +16,15 @@ Subcommands (run with -h for options):
   search <file> <keyword ...>           keyword hits in a cached text file (also works on any local .txt/.pdf)
   show   <file> <A-B>                   print paragraphs A..B (max 40) of a cached text file
   quote  <folder> <file> <A-B> --id ... write an Evidence file whose Quote/Context are copied from the cached file
+                                        (with EVIDENCE_ARCHIVE=1, a web page is snapshot by Save Page Now: archive_url)
+  archive <folder>                      snapshot the quoted web pages that have no archive_url yet (EVIDENCE_ARCHIVE=1)
   calc   <folder> "<formula>" --id ...  write an Evidence file that computes a number from numbers in other Evidence,
                                         e.g. "E-CON-001:1195 / E-PRO-004:63900 * 100"; verify recomputes it
   verify <folder> [ID ...] [--live]     check each Evidence quote against its cached source and/or the live URL,
                                         and recompute each calc
                                         (live: exact | partial | missing | unreachable, or unchanged when the
-                                        download is byte-identical to the cached one)
+                                        download is byte-identical to the cached one; when a web page is down,
+                                        archived <date>: exact | partial | missing against its snapshot)
 
 Cached text files have one paragraph per line, so "line" = "paragraph" everywhere.
 <folder> is the debate's agent/ folder; a project folder that contains agent/ is accepted too.
@@ -40,6 +44,7 @@ import ssl
 import subprocess
 import sys
 import tempfile
+import time
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -189,15 +194,23 @@ def _render(url):
     return out["html"].encode("utf-8"), "text/html; charset=utf-8", out
 
 
-def fetch_to_cache(folder, url, refresh=False, render=False):
+def fetch_to_cache(folder, url, refresh=False, render=False, archive=False):
+    if render and archive:
+        raise ValueError("--render and --archive don't combine: the archive keeps what the site served")
     web = Path(folder) / "evidence" / "files" / "web"
     web.mkdir(parents=True, exist_ok=True)
-    base = web / (cache_name(url) + ("-rendered" if render else ""))
+    base = web / (cache_name(url) + ("-rendered" if render else "-archived" if archive else ""))
     txt, meta = base.with_suffix(".txt"), base.with_suffix(".json")
     if txt.exists() and not refresh:
         return txt, json.loads(meta.read_text(encoding="utf-8"))
     extra = {}
-    if render:
+    if archive:
+        snapshot = _latest_snapshot(url)
+        if not snapshot:
+            raise LookupError("the Wayback Machine has no snapshot of this URL")
+        raw, ctype, insecure = _get_snapshot(snapshot)
+        extra = {"archive_url": snapshot, "archived": _snapshot_date(snapshot)}
+    elif render:
         raw, ctype, out = _render(url)
         insecure = False
         extra = {"rendered": True, "final_url": out["url"], "status": out["status"],
@@ -213,6 +226,65 @@ def fetch_to_cache(folder, url, refresh=False, render=False):
             "paragraphs": len(paras), "tls_unverified": insecure, **extra}
     meta.write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
     return txt, info
+
+
+# ---------- the Wayback Machine (archive.org) ----------
+
+WAYBACK_API = "https://archive.org/wayback/available?url="
+SNAPSHOT_RE = re.compile(r"^https?://web\.archive\.org/web/(\d{14})[a-z_]*/(.+)$")
+
+
+def _snapshot_date(snapshot_url):
+    m = SNAPSHOT_RE.match(snapshot_url or "")
+    return f"{m[1][:4]}-{m[1][4:6]}-{m[1][6:8]}" if m else ""
+
+
+def _latest_snapshot(url):
+    """The URL of the latest Wayback Machine snapshot of url, or None."""
+    raw, _, _ = _get(WAYBACK_API + urllib.parse.quote(url, safe=""))
+    closest = (json.loads(raw).get("archived_snapshots") or {}).get("closest") or {}
+    return closest.get("url") if closest.get("available") and SNAPSHOT_RE.match(closest.get("url", "")) else None
+
+
+def _get_snapshot(snapshot_url):
+    """The archived bytes as the site served them (the id_ form leaves out the Wayback Machine's toolbar)."""
+    m = SNAPSHOT_RE.match(snapshot_url)
+    if not m:
+        raise ValueError(f"not a Wayback Machine snapshot URL: {snapshot_url}")
+    return _get(f"https://web.archive.org/web/{m[1]}id_/{m[2]}")
+
+
+def _save_page_now(url):
+    """Ask the Wayback Machine to snapshot url now (Save Page Now); the snapshot's URL, or an exception."""
+    req = urllib.request.Request("https://web.archive.org/save/" + url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        for cand in (r.geturl(), r.headers.get("Content-Location", ""), r.headers.get("Location", "")):
+            cand = urllib.parse.urljoin("https://web.archive.org/", cand or "")
+            if SNAPSHOT_RE.match(cand):
+                return cand
+    raise RuntimeError("Save Page Now gave no snapshot URL")
+
+
+def _archiving():
+    """EVIDENCE_ARCHIVE turns on snapshots of quoted pages; off by default, since it sends each URL to archive.org."""
+    return os.environ.get("EVIDENCE_ARCHIVE", "").strip().lower() not in ("", "0", "off", "false", "no")
+
+
+def _known_snapshot(meta):
+    return meta.get("archive_url") or meta.get("snapshot_url")
+
+
+def _save_snapshot(meta_file, meta):
+    """Save Page Now for a fetched web page, recorded in its cache metadata so each page is sent once."""
+    meta["snapshot_url"] = _save_page_now(meta["url"])
+    meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+    return meta["snapshot_url"]
+
+
+def _is_web_page(meta_file, meta):
+    """A page `fetch` cached (not a pxweb query, a data script or a user's file, and never in sources/)."""
+    return (str(meta.get("url", "")).startswith("http") and meta.get("kind") in ("html", "pdf", "text")
+            and not meta.get("user_supplied") and "sources" not in Path(meta_file).resolve().parts)
 
 
 def load_lines(path):
@@ -278,19 +350,22 @@ def print_hits(lines, keywords, max_hits):
 
 def cmd_fetch(a):
     try:
-        txt, info = fetch_to_cache(a.folder, a.url, a.refresh, a.render)
+        txt, info = fetch_to_cache(a.folder, a.url, a.refresh, a.render, a.archive)
     except Exception as e:  # noqa: BLE001 - report any failure as one line
         print(f"FAILED {a.url}: {type(e).__name__}: {e}")
-        hint = "" if a.render else " If the page needs JavaScript, retry with --render."
+        hint = "" if a.render or a.archive else \
+            " If the site is down, retry with --archive. If the page needs JavaScript, retry with --render."
         print(f"→{hint} If this source matters, raise an Evidence Request (paywall/blocked) or try another URL.")
         sys.exit(1)
     rel = txt.relative_to(Path(a.folder))
     flag = " (TLS certificate NOT verified)" if info.get("tls_unverified") else ""
+    if info.get("archive_url"):
+        flag += f" (archived {info['archived']}: {info['archive_url']})"
     print(f"cached: {rel}  [{info['kind']}, {info['paragraphs']} paragraphs, fetched {info['fetched']}]{flag}")
     if info.get("title"):
         print(f"title: {info['title']}")
     lines = txt.read_text(encoding="utf-8").splitlines()
-    if not a.render and info["kind"] == "html" and sum(map(len, lines)) < 1500:
+    if not a.render and not a.archive and info["kind"] == "html" and sum(map(len, lines)) < 1500:
         print("note: very little text; if the page needs JavaScript, retry with --render.")
     print_hits(lines, a.keywords, a.max)
     if info.get("links"):
@@ -799,6 +874,12 @@ def cmd_quote(a):
     rel = str(path.relative_to(folder)) if path.is_relative_to(folder) else str(path)
     url = a.url or meta.get("url") or rel
     accessed = meta.get("fetched") or datetime.date.today().isoformat()
+    snapshot, queued = (_known_snapshot(meta) if url == meta.get("url") else None), None
+    if not snapshot and url == meta.get("url") and _archiving() and _is_web_page(meta_file, meta):
+        try:
+            snapshot = _save_snapshot(meta_file, meta)
+        except Exception as err:  # noqa: BLE001 - Save Page Now is rate-limited; the quote stands without it
+            queued = f"{type(err).__name__}: {str(err)[:80]}"
 
     def bq(paras):
         return "\n>\n".join(f"> {p}" for p in paras) if paras else "> (none: quote is at the edge of the source)"
@@ -817,6 +898,7 @@ def cmd_quote(a):
         f"language: {a.language}",
         f"source_file: {rel}",
         f"source_lines: {s}-{e}",
+        *([f"archive_url: {snapshot}"] if snapshot else []),
         "---",
         "",
         "## Quote",
@@ -849,6 +931,52 @@ def cmd_quote(a):
     ]
     out.write_text("\n".join(parts), encoding="utf-8")
     print(f"wrote evidence/{a.id}.md ({len(' '.join(quote_paras))} chars quoted from {rel} L{s}-{e})")
+    if queued:
+        print(f"note: no archive snapshot yet ({queued}); `evidence.py archive <folder>` retries it later.")
+
+
+ARCHIVE_PAUSE = 6  # seconds between Save Page Now requests: anonymous use is limited to a few a minute
+
+
+def cmd_archive(a):
+    """Snapshot every quoted web page that has none yet, and record it as archive_url in its Evidence."""
+    if not _archiving():
+        sys.exit("EVIDENCE_ARCHIVE is off: set EVIDENCE_ARCHIVE=1 to send quoted URLs to the Wayback Machine.")
+    folder = Path(a.folder)
+    waiting = {}  # source metadata file -> Evidence files that quote it without a snapshot
+    for f in sorted((folder / "evidence").glob("E-*.md")):
+        fm = _front(f.read_text(encoding="utf-8"))
+        if fm.get("archive_url") or not fm.get("source_file"):
+            continue
+        meta_file = (folder / fm["source_file"]).with_suffix(".json")
+        if meta_file.exists():
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+            if _is_web_page(meta_file, meta) and fm.get("url") == meta["url"]:
+                waiting.setdefault(meta_file, []).append(f)
+    saved = failed = 0
+    for n, (meta_file, evs) in enumerate(waiting.items()):
+        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        snapshot = _known_snapshot(meta)
+        if not snapshot:
+            if n:
+                time.sleep(ARCHIVE_PAUSE)
+            try:
+                snapshot = _save_snapshot(meta_file, meta)
+            except Exception as e:  # noqa: BLE001
+                failed += len(evs)
+                print(f"FAILED {meta['url']}: {type(e).__name__}: {str(e)[:80]} ({', '.join(f.stem for f in evs)})")
+                if isinstance(e, urllib.error.HTTPError) and e.code == 429:
+                    print("→ Save Page Now is rate-limiting: run archive again in a few minutes.")
+                    break
+                continue
+        for f in evs:
+            text = f.read_text(encoding="utf-8")
+            f.write_text(re.sub(r"\A(---\n.*?\n)(---\n)", lambda m: f"{m[1]}archive_url: {snapshot}\n{m[2]}",
+                                text, count=1, flags=re.S), encoding="utf-8")
+            saved += 1
+        print(f"{snapshot}  {', '.join(f.stem for f in evs)}")
+    left = sum(map(len, waiting.values())) - saved
+    print(f"{saved} Evidence given a snapshot" + (f", {left} still waiting" if left else "") + ".")
 
 
 # ---------- calc: arithmetic over Evidence ----------
@@ -1021,6 +1149,19 @@ def _live_paras(folder, url, pq, pscript, rendered):
         return e, [], None
 
 
+def _archived_paras(url, snapshot_url):
+    """(paragraphs, snapshot URL) of the given snapshot, or else of the latest one, or (the exception, None)."""
+    try:
+        snapshot_url = snapshot_url or _latest_snapshot(url)
+        if not snapshot_url:
+            raise LookupError("no archived copy")
+        raw, ctype, _ = _get_snapshot(snapshot_url)
+        with tempfile.TemporaryDirectory() as td:
+            return to_paragraphs(raw, ctype, td)[0], snapshot_url
+    except Exception as e:  # noqa: BLE001
+        return e, None
+
+
 def cmd_verify(a):
     folder = Path(a.folder)
     files = sorted((folder / "evidence").glob("E-*.md"))
@@ -1059,7 +1200,19 @@ def cmd_verify(a):
             if key not in sources:  # many Evidence quote one source: download it once per run
                 sources[key] = _live_paras(folder, url, pq, pscript, rendered)
             paras, how, sha = sources[key]
-            if isinstance(paras, Exception):
+            if isinstance(paras, Exception) and not (pq or pscript):  # a web page: try the Wayback Machine
+                akey = ("archive", url, fm.get("archive_url"))
+                if akey not in sources:
+                    sources[akey] = _archived_paras(url, fm.get("archive_url"))
+                apara, snap = sources[akey]
+                note.append(f"live: {type(paras).__name__}: {str(paras)[:60]}")
+                if isinstance(apara, Exception):
+                    live = "unreachable"
+                    note.append(f"archive: {type(apara).__name__}: {str(apara)[:60]}")
+                else:
+                    live = f"archived {_snapshot_date(snap)}: {match_quality(quote, norm(' '.join(apara)))}"
+                    note.append(f"archive: {snap}")
+            elif isinstance(paras, Exception):
                 live = "unreachable"
                 note.append(f"{type(paras).__name__}: {str(paras)[:60]}")
             elif sha and sha == pinfo.get("sha256"):
@@ -1083,6 +1236,7 @@ def main():
     p.add_argument("--refresh", action="store_true", help="re-download even if cached")
     p.add_argument("--max", type=int, default=8, help="max hits per keyword (default 8)")
     p.add_argument("--render", action="store_true", help="load the page in headless Chromium (JavaScript sites)")
+    p.add_argument("--archive", action="store_true", help="the latest Wayback Machine snapshot instead (site down)")
     p.set_defaults(fn=cmd_fetch)
     p = sub.add_parser("import", help="extract the text of a user-supplied file into evidence/files/user-<name>.txt")
     p.add_argument("folder")
@@ -1161,6 +1315,10 @@ def main():
     p.add_argument("--method", required=True, help="one or two sentences: what each input is, and why the formula combines them so")
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_calc)
+
+    p = sub.add_parser("archive", help="snapshot quoted web pages in the Wayback Machine (needs EVIDENCE_ARCHIVE=1)")
+    p.add_argument("folder")
+    p.set_defaults(fn=cmd_archive)
 
     p = sub.add_parser("verify", help="check Evidence quotes against cached and/or live sources")
     p.add_argument("folder")
