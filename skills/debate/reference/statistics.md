@@ -115,3 +115,42 @@ print(json.dumps({"title": wb.series.get(series)["value"],
                   "url": f"https://data.worldbank.org/indicator/{series}",
                   "rows": rows}, ensure_ascii=False))
 ```
+
+## Real and nominal amounts
+
+An amount in euros from one year, compared with an amount or a price from another, is nominal unless you adjust it. To state it at another year's prices, fetch a price index as Evidence and adjust it with a calc:
+
+```
+calc "<amount>:<value> * <index>:<target period> / <index>:<base period>"
+```
+
+1. **Pick the index.** For Slovenia use SURS's consumer price index (CPI). Use Eurostat's harmonised index (HICP, `PRC_HICP_AIND` annual, `PRC_HICP_MIDX` monthly) for a comparison across EU countries. Deflate a spending category with that category's index (food with group 01, food and non-alcoholic beverages), and an income or a total with the all-items index (`SKUPAJ`, `CP00`).
+2. **Fetch both periods from one series:** the same index, area, group and base (`2025 = 100`). Index levels on one base divide directly. Don't mix a CPI level with an HICP one, or levels with growth rates.
+3. **Match the periods.** An amount for a year goes with that year's annual average. For the current year, when there is no annual average yet, use the latest month, and say so: one month of a food index can sit two points off its neighbours.
+4. **Quote the index rows** with `quote`, then write the calc. Its `--method` names the index, the group, the area, the base and both periods, and what the result is: the earlier basket at the later prices, not what the household spends in the later year.
+
+SURS, food and all items, annual average and the months of the current year (both tables on the base 2025 average = 100):
+
+```python
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["sistat==0.2.0"]
+# ///
+import json, sistat
+c = sistat.Client(lang="sl")
+table = "0400611S"        # annual; monthly: "0400608S" with "MESEC": "2026M*" and "ŽIVLJENJSKA POTREBŠČINA" for the group
+rows = c.get_records(table, {"MERITVE": "Indeks (leto / povprečje leta 2025)",
+                             "GLAVNA SKUPINA": ["SKUPAJ", "01 HRANA IN BREZALKOHOLNE PIJAČE"],
+                             "LETO": ["2022", "2023", "2024", "2025"]})
+print(json.dumps({"title": c.metadata(table).title,
+                  "url": f"https://pxweb.stat.si/SiStatData/pxweb/sl/Data/-/{table}.px",
+                  "rows": rows}, ensure_ascii=False))
+```
+
+Then, with the 2022 food spending of the lowest income quintile (EUR 772.4 million), the 2022 average food index (83.6) and the October 2026 one (102.34):
+
+```
+calc "E-CON-D-028:772.4 * E-CON-D-034:102.34 / E-CON-D-033:83.6"      → 945.543 (EUR million, at October 2026 food prices)
+```
+
+The base index is often `100`, and that number stands in every row of the base year. Pick the right row with `--at` and the label that sets the row apart (`--at "E-CON-D-033:100=01 HRANA IN BREZALKOHOLNE PIJAČE"`); `--at` takes no `|`, so don't copy the column separator.
