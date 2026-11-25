@@ -28,6 +28,7 @@ The main agent stops after each Stage and asks before starting the next. When an
 - `pdftotext` (poppler-utils) for PDF sources
 - Chromium for JavaScript sites (`evidence.py fetch --render`): `uvx playwright@1.65.2 install chromium`
 - An OpenAlex API key for research-paper searches (`evidence.py papers`), free at https://openalex.org/settings/api. Set it as `OPENALEX_API_KEY`, in Claude Code under `"env"` in `~/.claude/settings.json`. Without it, searches share a small daily budget per network, and the debate warns you.
+- Optional: `EVIDENCE_ARCHIVE=1` (set the same way) has the Wayback Machine snapshot every web page quoted as Evidence, so readers can check a quote after the page changes or disappears, and the HTML Report links the snapshot. Off by default, because it sends every quoted URL to archive.org. A site that is down is checked against its latest snapshot either way.
 
 ## Install
 
@@ -75,7 +76,7 @@ skills/debate/         the skill itself (everything that gets installed)
   reference/           shared Evidence rules, site recipes, statistics sources, research papers
   templates/           case, Evidence, audit, motion, state, report, short report, methodology,
                        project README.md and CLAUDE.md
-  scripts/             evidence.py (fetch, quote, calc, verify, papers, data, pxweb), ledger.py (checks),
+  scripts/             evidence.py (fetch, quote, calc, verify, archive, papers, data, pxweb), ledger.py (checks),
                        report_html.py (HTML report), short_html.py (Short Report, via report_html.py --short),
                        numcheck.py (the NUMBER check of both),
                        render.py (headless Chromium)

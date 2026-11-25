@@ -94,7 +94,7 @@ STRINGS = {
         "Side": "Side", "Category": "Category", "Series": "Series", "Evidence": "Evidence",
         "label_Settled": "Settled", "label_Open questions": "Open questions", "label_Value questions": "Depends on your values",
         "about": "About", "close": "Close",
-        "dlg": {"quote": "Quote", "translation": "Translation", "close": "Close", "source": "source", "file": "Evidence file",
+        "dlg": {"quote": "Quote", "translation": "Translation", "close": "Close", "source": "source", "archived": "archived copy", "file": "Evidence file",
                 "audit": "Audit", "tier": "Source Tier", "found": "Quote found", "supports": "Supports", "cherry": "Cherry-picked",
                 "funder": "Funder", "notes": "Auditor notes"},
         "info_tier_title": "Source Tiers",
@@ -154,7 +154,7 @@ STRINGS = {
         "Side": "Stran", "Category": "Kategorija", "Series": "Niz", "Evidence": "Dokazi",
         "label_Settled": "Ugotovljeno", "label_Open questions": "Odprta vprašanja", "label_Value questions": "Odvisno od vaših vrednot",
         "about": "Pojasnilo", "close": "Zapri",
-        "dlg": {"quote": "Navedek", "translation": "Prevod", "close": "Zapri", "source": "vir", "file": "Datoteka dokaza",
+        "dlg": {"quote": "Navedek", "translation": "Prevod", "close": "Zapri", "source": "vir", "archived": "arhivirana kopija", "file": "Datoteka dokaza",
                 "audit": "Preverjanje", "tier": "Raven vira", "found": "Navedek najden", "supports": "Podpira", "cherry": "Selektivno izbran",
                 "funder": "Financer / povezanost", "notes": "Opombe preverjevalca"},
         "info_tier_title": "Ravni virov",
@@ -258,6 +258,7 @@ def load_evidence(folder):
             "publisher": fm.get("publisher", ""),
             "published": fm.get("published", ""),
             "url": fm.get("url", ""),
+            "archive_url": fm.get("archive_url", ""),
             "quote": section(text, "Quote"),
             "translation": section(text, "Translation"),
             "tier": tier if tier in TIERS else "",
@@ -861,7 +862,7 @@ function openEv(id){const e=EV[id];if(!e)return false;
  const t=e.translation?`<div class="lang">${L.translation}</div><blockquote>${esc(e.translation).replace(/\\n/g,'<br>')}</blockquote>`:'';
  const row=(k,v)=>v?`<dt>${k}</dt><dd>${esc(v)}</dd>`:'';
  dlg.innerHTML=`<button onclick="this.closest('dialog').close()">${L.close}</button><h4>${esc(id)}: ${esc(e.title)}</h4>
- <div class="m">${esc(e.publisher)}${e.published?' · '+esc(e.published):''}${e.url?` · <a href="${esc(e.url)}" target="_blank" rel="noopener">${L.source}</a>`:''} · <a href="${esc(L.evdir)}/${esc(id)}.md">${L.file}</a></div>${q}${t}
+ <div class="m">${esc(e.publisher)}${e.published?' · '+esc(e.published):''}${e.url?` · <a href="${esc(e.url)}" target="_blank" rel="noopener">${L.source}</a>`:''}${e.archive_url?` · <a href="${esc(e.archive_url)}" target="_blank" rel="noopener">${L.archived}</a>`:''} · <a href="${esc(L.evdir)}/${esc(id)}.md">${L.file}</a></div>${q}${t}
  <dl>${row(L.audit,L.results[e.audit]||e.audit)}${row(L.tier,e.tier)}${row(L.found,e.found)}${row(L.supports,e.supports)}${row(L.cherry,e.cherry)}${row(L.funder,e.funder)}${row(L.notes,e.notes)}</dl>`;
  dlg.showModal();return true;}
 document.addEventListener('click',e=>{const a=e.target.closest('[data-ev]');if(!a)return;const id=a.dataset.ev.split(',')[0].trim();

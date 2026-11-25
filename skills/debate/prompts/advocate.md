@@ -68,7 +68,7 @@ The other Side's notes are its private work. Your case stands on the public reco
 
 **Revision.** The debate ran before, and your dispatch says what has changed since. Write a complete Rejoinder, with every rule above, that replaces the Earlier file:
 - Start from the Earlier file. Keep what still holds, and rework what the change bears on: new tools may reach stronger sources (a database instead of a press release, a peer-reviewed paper instead of its abstract), new events may settle or reopen a Claim, new user sources may fill an Evidence Request.
-- In `revision-<N>-verify.md`, find your Evidence whose live source is now `partial`, `missing` or `unreachable`. Open the source, and replace the Evidence or say in the follow-up section why the Claim still stands.
+- In `revision-<N>-verify.md`, find your Evidence whose live source is now `partial`, `missing` or `unreachable`, or `archived …: partial` or `missing`. Open the source, and replace the Evidence or say in the follow-up section why the Claim still stands.
 - You may add Claims, with new IDs. Restate a Claim under its existing ID when its Evidence or wording changes. Withdraw a Claim in the "Evidence audit follow-up" section, with the reason.
 - End the Summary with a paragraph that starts `Changed in Revision <N>:` and lists what you added, replaced and withdrew, by Claim ID. The Judge reports it.
 

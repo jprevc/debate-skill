@@ -11,6 +11,7 @@ published: YYYY-MM-DD    # or YYYY, or "unknown"
 language: sl             # ISO 639-1 code of the source
 source_file: evidence/files/web/<cached>.txt   # written by scripts/evidence.py quote
 source_lines: 41-41      # paragraph range of the quote in source_file
+archive_url: https://web.archive.org/web/…   # only with a Wayback Machine snapshot (fetch --archive, EVIDENCE_ARCHIVE)
 ---
 <!-- A calc (evidence.py calc, reference/evidence.md) has kind: calc, formula, inputs and result instead of
      source_file and source_lines, the formula as its Quote, and an Inputs section instead of Context. -->
