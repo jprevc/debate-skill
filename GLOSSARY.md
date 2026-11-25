@@ -47,8 +47,12 @@ A neutral subagent that turns the finished record into a turn-by-turn rendering 
 _Avoid_: Writer, narrator
 
 **Checker**:
-A neutral subagent that compares each turn of the Confrontation with the Claims and responses it names, and flags anything the record does not say.
+A neutral subagent that compares each turn of the Confrontation with the Claims and responses it names, and flags anything the record does not say. It checks the Short Report against the Report and the Confrontation the same way.
 _Avoid_: Auditor (which checks Evidence against its sources), reviewer
+
+**Summariser**:
+A neutral subagent that writes the Short Report from the Report and the Confrontation, choosing and shortening but adding nothing.
+_Avoid_: Editor (which writes the Confrontation), writer
 
 ## Evidence
 
@@ -90,6 +94,10 @@ An Advocate's acceptance of an opposing Claim combined with an argument that it 
 **Report**:
 The final verdict-free document that maps the cruxes and equips the user to argue either Side.
 _Avoid_: Verdict, summary
+
+**Short Report**:
+An optional one-page version of the Report for a reader who wants both Sides clearly: the key facts, one card per Dimension, and the detail behind a "More on this" panel. It adds nothing to the Report and the Confrontation it shortens.
+_Avoid_: Summary, digest, brief
 
 **Open Question**:
 A disagreement that Evidence can settle (or shows is unsettled). In the Report it appears under "Open questions", each with its status.

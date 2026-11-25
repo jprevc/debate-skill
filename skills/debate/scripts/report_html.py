@@ -5,7 +5,9 @@
 # ///
 """Build report.html from a finished debate folder.
 
-Usage: uv run --script report_html.py <project-folder> [--lang <code>]
+Usage: uv run --script report_html.py <project-folder> [--lang <code>] [--short]
+
+--short builds the Short Report instead (scripts/short_html.py; outputs/report-short.md → report-short.html).
 
 The project folder holds sources/ (the user's files), agent/ (the debate record) and
 outputs/ (the Reports); agent/ itself is accepted too. A folder with no agent/ is read as
@@ -988,6 +990,11 @@ def layout(p):
 def main():
     global UI, EVDIR
     args = sys.argv[1:]
+    if "--short" in args:  # the Short Report has its own builder
+        args.remove("--short")
+        import short_html
+        short_html.main(args)
+        return
     lang = None
     if "--lang" in args:
         i = args.index("--lang")
