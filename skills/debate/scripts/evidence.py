@@ -35,6 +35,7 @@ Cached text files have one paragraph per line, so "line" = "paragraph" everywher
 """
 import argparse
 import ast
+import collections
 import datetime
 import decimal
 import hashlib
@@ -1176,37 +1177,41 @@ def cmd_calc(a):
     print(f"wrote evidence/{a.id}.md: {shown} = {res}")
 
 
+CaseItem = collections.namedtuple("CaseItem", "line cites body_start body")
+
+
 def case_items(text):
-    """The Claims and responses of a case file: (header line number, Evidence IDs in the header, first body line
-    number, body). A body runs from the line after its header to the next Claim, response, Evidence Request or
-    heading."""
+    """The Claims and responses of a case file, as CaseItems: the header's line number, the Evidence IDs in the
+    header, the first body line's number, and the body. A body runs from the line after its header to the next Claim,
+    response, Evidence Request or heading."""
     import ledger
     head = re.compile(rf"^(?:\*\*(?:Re |R-)?{ledger.CID}\b|#)")
     items, cur = [], None
     for i, ln in enumerate(text.splitlines(), 1):
         if head.match(ln):
             m = ledger.CLAIM_ANY_RE.match(ln) or ledger.RESP_ANY_RE.match(ln)
-            cur = [i, ledger.ID_RE.findall(m["rest"]), i + 1, []] if m else None
+            cur = CaseItem(i, ledger.ID_RE.findall(m["rest"]), i + 1, []) if m else None
             if cur:
                 items.append(cur)
         elif cur:
-            cur[3].append(ln)
-    return [(i, ids, b, "\n".join(body)) for i, ids, b, body in items]
+            cur.body.append(ln)
+    return [item._replace(body="\n".join(item.body)) for item in items]
 
 
 def cmd_numbers(a):
     """NUMBER lines for the Claims and responses of case files: numbers in a body that none of the Evidence in its
     header, or cited in its body, states. Advisory: the Advocate fixes them before it replies."""
     import numcheck
-    folder = work_dir(a.folder)
+    folder = Path(a.folder)
     evdir = folder / "evidence"
     total = bad_items = bad_numbers = 0
     for arg in a.files:
         f = Path(arg) if Path(arg).exists() else folder / arg
         if not f.exists():
             sys.exit(f"{arg}: no such case file")
-        for _, cites, start, body in case_items(f.read_text(encoding="utf-8")):
-            cites = list(dict.fromkeys(cites + [x or y for x, y in numcheck.LINK_RE.findall(body)]))
+        for item in case_items(f.read_text(encoding="utf-8")):
+            body, start = item.body, item.body_start
+            cites = list(dict.fromkeys(item.cites + [x or y for x, y in numcheck.LINK_RE.findall(body)]))
             if not any((evdir / f"{e}.md").exists() for e in cites):
                 continue  # a Value Claim or a Concession with no Evidence: nothing to check against
             total += 1
