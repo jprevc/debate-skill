@@ -33,6 +33,8 @@ Prints problems one per line, like ledger.py:
   CAPTION  a figure's caption or note states a number (a rate, or an amount of 100 or
            more) that is neither in the figure's data nor in its Evidence quotes
   STATUS   an Open Question in the Report lacks its "· Status: …" marker
+  NUMBER   a sentence states a number that none of the Evidence it cites contains (in its Quote, Translation
+           or Context), even rounded: a typo, a number from elsewhere, or arithmetic with no calc Evidence
   LANG     the Report language has no interface strings; English is used
   REQUEST  an Evidence Request in state.md has a status other than open, partial,
            fulfilled or unavailable; it is shown as open
@@ -51,6 +53,7 @@ import markdown
 
 sys.path.insert(0, str(Path(__file__).parent))
 from ledger import CID, CLAIM_RE, EID, FILE_RE, audit_field, frontmatter, parse_confrontation  # noqa: E402
+import numcheck  # noqa: E402
 
 SIDES = ("PRO", "CON")
 TIERS = ("A", "B", "C", "D")
@@ -1012,6 +1015,7 @@ def main():
         print(f"report.md missing in {outdir}")
         return
     report = report_p.read_text(encoding="utf-8")
+    problems.extend(numcheck.check_prose(report, report_p.name, folder / "evidence"))
     motion, domain_tiers, report_lang = read_motion(folder, lang)
     code = lang or LANG_NAMES.get(report_lang.lower(), "en" if not report_lang else None)
     if code not in STRINGS:

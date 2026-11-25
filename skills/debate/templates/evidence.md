@@ -12,6 +12,8 @@ language: sl             # ISO 639-1 code of the source
 source_file: evidence/files/web/<cached>.txt   # written by scripts/evidence.py quote
 source_lines: 41-41      # paragraph range of the quote in source_file
 ---
+<!-- A calc (evidence.py calc, reference/evidence.md) has kind: calc, formula, inputs and result instead of
+     source_file and source_lines, the formula as its Quote, and an Inputs section instead of Context. -->
 
 ## Quote
 

@@ -61,8 +61,10 @@ The record in the folder is your whole world. The Advocates' notes files are the
    - Every rate, threshold or amount in the caption is in the figure's data, in its note, or in the quote of its Evidence. If it comes from Evidence that no series cites, list that Evidence in `"caption_evidence": ["E-…"]`.
    - Read the caption against the plotted values. A sentence such as "above EUR 60,000 it recognises 70%" has to match what the lines show at that point.
    - Lines being compared cover the same range of the x-axis. If a source gives only one example point, extend the line by the rule it states and say so in `note`.
-3. Run `uv run --script <skill dir>/scripts/report_html.py <folder>`. It writes `outputs/report.html`, with charts of the record and your figures, and prints each problem it finds: a missing `Status`; a figure citing Evidence that is missing, failed the Audit or was never audited; or a `CAPTION` number that neither the data, the note nor the cited Evidence contains. Fix them and rerun until it prints none. If a `CAPTION` number truly has no source in the record, take it out of the caption.
-4. Reply to the orchestrator with the Report path and a three-line summary of the main cruxes.
+3. Run `uv run --script <skill dir>/scripts/report_html.py <folder>`. It writes `outputs/report.html`, with charts of the record and your figures, and prints each problem it finds: a missing `Status`; a figure citing Evidence that is missing, failed the Audit or was never audited; a `CAPTION` number that neither the data, the note nor the cited Evidence contains; or a `NUMBER` in the Report that none of its sentence's Evidence states. Fix them and rerun until it prints none. If a `CAPTION` number truly has no source in the record, take it out of the caption.
+   - For a `NUMBER` line, first check the number against the Evidence. Then cite the Evidence that does state it (often a calc, `kind: calc`, which an Advocate made for that arithmetic), correct it, or write the inputs the record has instead of a result it lacks ("EUR 5,159 net, taxed at an average 36.83%"). You don't add Evidence yourself.
+   - A `NUMBER` line may stay when the number is right and only the check misreads it: a count of the record's own items, or a number that names something rather than measures it. List each one you leave in your reply, with the reason.
+4. Reply to the orchestrator with the Report path, a three-line summary of the main cruxes, and any `NUMBER` lines you left.
 
 ## Done means
 
@@ -70,4 +72,4 @@ The record in the folder is your whole world. The Advocates' notes files are the
 - Every factual statement in the Report links to audited Evidence that did not fail. Where it rests on a partial result, the text says what the Auditor limited.
 - The Report nowhere tells the reader which way to decide, including in its title.
 - The Report ends with the Methodology section, and its text has no tier letters.
-- `report_html.py` prints no problems, and every figure value traces to audited Evidence.
+- `report_html.py` prints no problems except `NUMBER` lines you listed in your reply, and every figure value traces to audited Evidence.

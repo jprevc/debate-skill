@@ -75,8 +75,9 @@ skills/debate/         the skill itself (everything that gets installed)
   reference/           shared Evidence rules, site recipes, statistics sources, research papers
   templates/           case, Evidence, audit, motion, state, report, short report, methodology,
                        project README.md and CLAUDE.md
-  scripts/             evidence.py (fetch, quote, verify, papers, data, pxweb), ledger.py (checks),
+  scripts/             evidence.py (fetch, quote, calc, verify, papers, data, pxweb), ledger.py (checks),
                        report_html.py (HTML report), short_html.py (Short Report, via report_html.py --short),
+                       numcheck.py (the NUMBER check of both),
                        render.py (headless Chromium)
   assets/              fonts.css: the Short Report's embedded fonts (SIL OFL 1.1, see FONTS-LICENSE.md)
 tests/                 tests for the scripts (not installed); run them with

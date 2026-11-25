@@ -14,9 +14,9 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[1] / "skills" / "debate" / "scripts"
 
 
-def evidence(eid, result="passed"):
+def evidence(eid, result="passed", quote=None):
     return (f"---\nid: {eid}\nadded_by: {eid.split('-')[1]}\ntitle: Source of {eid}\npublisher: Office\n"
-            f"url: https://example.org/{eid}\n---\n\n## Quote\n\n> Quote of {eid}.\n\n## Audit\n\n"
+            f"url: https://example.org/{eid}\n---\n\n## Quote\n\n> {quote or f'Quote of {eid}.'}\n\n## Audit\n\n"
             f"- Result: {result}\n- Quote found: yes\n- Supports: yes\n- Cherry-picked: no\n- Source Tier: A\n")
 
 
@@ -173,8 +173,9 @@ class ShortReport(unittest.TestCase):
         (agent / "evidence").mkdir(parents=True)
         out.mkdir()
         (agent / "motion.md").write_text(MOTION, encoding="utf-8")
-        for eid in ("E-PRO-001", "E-CON-001"):
-            (agent / "evidence" / f"{eid}.md").write_text(evidence(eid), encoding="utf-8")
+        (agent / "evidence" / "E-PRO-001.md").write_text(evidence("E-PRO-001"), encoding="utf-8")
+        (agent / "evidence" / "E-CON-001.md").write_text(
+            evidence("E-CON-001", quote="Ocena: 79,6 mio EUR na leto."), encoding="utf-8")
         (agent / "evidence" / "E-CON-002.md").write_text(evidence("E-CON-002", "failed"), encoding="utf-8")
         (agent / "figures.json").write_text(json.dumps(FIGURES), encoding="utf-8")
         (out / "report.md").write_text(REPORT, encoding="utf-8")

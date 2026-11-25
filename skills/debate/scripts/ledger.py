@@ -6,7 +6,8 @@ Usage: python3 ledger.py <debate-folder>
 Writes <debate-folder>/ledger.md and prints problems to stdout, one per line:
   DANGLING    a case file cites an Evidence ID that has no file (possible fabrication)
   UNCITED     an Evidence file no Claim or response cites (case files archived in history/<N>/ by a
-              revision count as citing; they are not checked otherwise)
+              revision count as citing; they are not checked otherwise). A calc cites its inputs, and
+              DANGLING names the calc when an input has no file
   SECTION     a case file lacks a required template heading (headings stay in English)
   BADCLAIM    a Claim line breaks the format in reference/evidence.md, names an unknown
               Dimension, uses another prefix, or lacks the Evidence its type needs
@@ -340,6 +341,11 @@ def main():
         name = f.relative_to(folder).with_suffix("").as_posix()
         for eid in ID_RE.findall(f.read_text(encoding="utf-8")):
             cited_by.setdefault(eid, set()).add(name)
+
+    for eid, (fm, text) in evidence.items():  # a calc cites the Evidence it computes from
+        if fm.get("kind") == "calc":
+            for i in ID_RE.findall(fm.get("inputs", "")):
+                cited_by.setdefault(i, set()).add(eid)
 
     rows = []
     for eid, (fm, text) in evidence.items():

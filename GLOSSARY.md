@@ -64,6 +64,10 @@ _Avoid_: Argument, point
 A single recorded, citable excerpt from a source, quoted verbatim in its original language.
 _Avoid_: Source, proof, citation
 
+**Calc**:
+Evidence that computes a number from numbers quoted in other Evidence, written and rechecked by `evidence.py calc`. It adds arithmetic to the record, never a fact.
+_Avoid_: Calculation note, own estimate
+
 **Evidence Ledger**:
 The complete record of all Evidence gathered in one debate.
 _Avoid_: Bibliography, source list

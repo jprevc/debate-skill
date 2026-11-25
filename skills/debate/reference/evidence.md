@@ -21,6 +21,7 @@ python3 <skill dir>/scripts/evidence.py search <cached file> <keyword> [keyword 
 python3 <skill dir>/scripts/evidence.py show   <cached file> <A-B>                     # read paragraphs A-B (max 40)
 python3 <skill dir>/scripts/evidence.py quote  <folder> <cached file> <A-B> --id … --added-by … --stage … \
         --title … --publisher … --language … [--author …] [--published …] [--from TEXT] [--to TEXT] [--translation TEXT]
+python3 <skill dir>/scripts/evidence.py calc   <folder> "<formula>" --id … --added-by … --stage … --title … --method …
 ```
 
 The user's own files stay unchanged in `../sources/`; their text is in `evidence/files/user-*.txt` (made by `evidence.py import`, which records the original as the url). Quote from those extracts like any cached file. `fetch` stores a text copy in `evidence/files/web/` with one paragraph per line, so ranges are paragraph numbers. The cache is shared: what any participant fetched, every other participant can reuse with `sources` and `search`, at no download cost. When a plain `fetch` returns little or no text, the site needs JavaScript: rerun it with `--render`. A rendered page also lists its document links (PDF, attachments). `fetch` the one you need, because the document itself is the better source. Known URL schemes for particular sites are in `reference/sites.md`. For a statistical figure, query the database with a `data` script, as `reference/statistics.md` describes, rather than quoting a press release about it. `data` caches one row per line with every column named (`LETO: 2025`), so `quote` and the Audit work on a row exactly as on a paragraph. `quote` copies the quote and one paragraph of context on each side straight from that copy into the Evidence file, and records `source_file` and `source_lines`. Use `--from` and `--to` to trim the quote to a sentence within its first and last paragraph. That keeps every quote verbatim by construction, and lets the Audit check it mechanically. `templates/evidence.md` shows the result. Write an Evidence file by hand only for a source the script can't fetch but you could read, and then fill in every field of the template.
@@ -42,6 +43,23 @@ Rules:
 - **Own files only.** An Advocate creates and edits only the Evidence files with its own prefix. To use the other Side's Evidence, cite its ID. Which Claims cite which Evidence is worked out from the case files and indexed in `ledger.md`, so Evidence files don't record that.
 - **Remarks go in Context.** The `## Audit` section belongs to the Auditor, so leave it as `quote` writes it. Put your own remarks about a source, such as who funds it or a caveat, on an `Advocate's note:` line at the end of `## Context`.
 - Sources may be in any language.
+
+### Calculations
+
+A number you work out yourself, such as a sum, a share of GDP, a ratio or a gross amount from a net one, is a **calc**: Evidence that `evidence.py calc` writes from numbers already quoted in other Evidence. Cite the calc wherever you state its result, the same way you cite a quote.
+
+```
+python3 <skill dir>/scripts/evidence.py calc <folder> "E-CON-B-040:5159.12 / (1 - E-PRO-B-046:36.83 / 100)" \
+        --id E-PRO-B-051 --added-by PRO-B --stage rebuttal --title "Gross wage at which the cap starts, EUR a month" \
+        --method "The highest pension base (E-CON-B-040) is net; dividing by one minus the average rate of tax and contributions (E-PRO-B-046) gives the gross wage."
+```
+
+- Write each input as `<Evidence ID>:<number>`, copied from that Evidence's Quote or Context as a plain decimal: `36,83 %` is `36.83`, `1.195 mio EUR` is `1195`. Any other number in the formula is a constant (`100`, `12` months). Formulas use `+ - * / **` and brackets.
+- `calc` refuses an input that is not in its Evidence, an input that failed the Audit, and anything that is not arithmetic. It writes the formula and its result as the Quote, and each input with the passage it stands in.
+- `--method` says what each input is and why the formula combines them that way: the same year, unit and population, or how they differ. The Auditor checks exactly that.
+- A Claim that rests on a calc is an Inference: cite the calc, and the Evidence of the inputs where the Claim uses their meaning.
+
+The Report is checked the same way: `report_html.py` prints a `NUMBER` line for every number in a sentence that none of the sentence's Evidence states, even rounded. A number you computed without a calc ends up as one of those lines.
 
 ## Source Tiers
 
@@ -70,7 +88,7 @@ Claim IDs are `PRO-N` and `CON-N`, or `PRO-A-N` when the Advocate is in a group.
 | **Factual** | cites Evidence |
 | **Predictive** ("this will cause Y") | cites Evidence for the mechanism, or for comparable cases elsewhere |
 | **Value** ("fairness requires…") | no Evidence; the label is what makes it honest |
-| **Inference** | cites the Evidence it builds on and shows the reasoning step |
+| **Inference** | cites the Evidence it builds on and shows the reasoning step; a number it computes cites a calc (see Calculations) |
 
 A Claim that depends on an open Evidence Request gets the marker `· Pending Evidence: R-PRO-2` after its Evidence list. Write a Claim with no support as a Value or Inference Claim, which tells the reader exactly how much weight it carries.
 
