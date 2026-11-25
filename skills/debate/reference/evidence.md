@@ -23,6 +23,7 @@ python3 <skill dir>/scripts/evidence.py show   <cached file> <A-B>              
 python3 <skill dir>/scripts/evidence.py quote  <folder> <cached file> <A-B> --id … --added-by … --stage … \
         --title … --publisher … --language … [--author …] [--published …] [--from TEXT] [--to TEXT] [--translation TEXT]
 python3 <skill dir>/scripts/evidence.py calc   <folder> "<formula>" --id … --added-by … --stage … --title … --method …
+python3 <skill dir>/scripts/evidence.py lawdiff <folder> <cached bill> <cached consolidated law> [--articles 15,16]   # each amended article before and after (reference/sites.md)
 python3 <skill dir>/scripts/evidence.py numbers <folder> <case file> [case file …]    # numbers in your Claims and responses that their Evidence doesn't state
 ```
 

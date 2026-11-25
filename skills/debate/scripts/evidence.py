@@ -21,6 +21,9 @@ Subcommands (run with -h for options):
   calc   <folder> "<formula>" --id ...  write an Evidence file that computes a number from numbers in other Evidence
                                         (--at ID:VALUE=WORDS picks the passage of a number that stands in several),
                                         e.g. "E-CON-001:1195 / E-PRO-004:63900 * 100"; verify recomputes it
+  lawdiff <folder> <bill> <law>         line up a Slovenian bill's amending articles with the consolidated law (PIS):
+                                        each article in force and as amended -> evidence/files/lawdiff/<law>-<bill>.txt
+                                        (an article it can't apply is marked unparsed and shown as both full texts)
   numbers <folder> <case file> [...]    NUMBER lines: numbers in a Claim or response that none of the Evidence in its
                                         header or body states (advisory; fix with calc, a citation or the number)
   verify <folder> [ID ...] [--live]     check each Evidence quote against its cached source and/or the live URL,
@@ -1361,6 +1364,393 @@ def cmd_verify(a):
         print(f"| {f.stem} | {cached} | {live} | {'; '.join(note)} |")
 
 
+# ---------- lawdiff: a bill's amending articles against the consolidated law (Slovenian drafting) ----------
+
+ART = r"\d+\.[a-zčšž]?"
+ART_HEAD = re.compile(rf"^({ART}) člen$")
+LAW_NOISE = re.compile(r"^(Sodna praksa|Opomba:|3\d{4}[A-Z]\d{4}$)")
+AMENDING_ACT = re.compile(r"^\d{4}-\d{2}-\d+\S*Zakon")  # PIS lists the amending acts' own provisions after the law
+
+
+class Unparsed(Exception):
+    """An amending article lawdiff can't apply; it is shown as both full texts."""
+
+
+def _art(num):
+    return num if num.endswith(".") or "." in num else num + "."
+
+
+def _law_articles(lines):
+    """{'2.': {'num', 'title', 'paras'}} from a PIS consolidated text: each article's first appearance, up to the
+    amending acts' provisions. A paragraph starts with (n); bullets and table rows join the paragraph above."""
+    arts, cur = {}, None
+    for ln in lines:
+        if AMENDING_ACT.match(ln):
+            break
+        m = ART_HEAD.match(ln)
+        if m:
+            cur = None if m[1] in arts else arts.setdefault(m[1], {"num": m[1], "title": "", "paras": []})
+            continue
+        if cur is None or LAW_NOISE.match(ln):
+            continue
+        if re.match(r"^[IVXLC]+\.( |$)|.*\bpoglavje:", ln):
+            continue  # a chapter heading between articles
+        if ln.startswith("(") and not re.match(r"^\(\d+\) ", ln) and not cur["title"] and not cur["paras"]:
+            cur["title"] = ln
+        elif re.match(r"^\(\d+\) ", ln) or not cur["paras"]:
+            cur["paras"].append(ln)
+        else:
+            cur["paras"][-1] += " " + ln
+    return arts
+
+
+def _bill_articles(lines):
+    """[(num, body)] of a bill: an article heading stands alone at the end of a paragraph, outside quotation marks
+    (a PDF extract may run it on after the previous paragraph's text)."""
+    text = "\n".join(lines)
+    heads = []
+    for m in re.finditer(rf"(?:(?<=\n)|(?<=^)|(?<=[.:«] )|(?<=[A-ZČŠŽ] ))({ART}) člen(?=\n|$)", text):
+        before = text[:m.start()]
+        if before.count("»") <= before.count("«"):
+            heads.append(m)
+    bodies = [text[m.end():(heads[k + 1].start() if k + 1 < len(heads) else len(text))] for k, m in enumerate(heads)]
+    # a part or section heading ("TRETJI DEL", "2. ZAKON O DAVKIH") closes the body of the article before it
+    tail = re.compile(r"(?:\s+(?:\d+\.\s+)?[A-ZČŠŽ]{2,}(?:[ ,]+[A-ZČŠŽ]{1,}\.?)+)+\s*$")
+    return [(m[1], tail.sub("", b).strip()) for m, b in zip(heads, bodies)]
+
+
+def _act_name(s):
+    """'Zakon o dohodnini (ZDoh-2) (PISRS)' and 'V Zakonu o dohodnini (Uradni list …' -> 'o dohodnini'."""
+    m = re.search(r"\bzakon\w* (o .*?)\s*(?:\(|$)", norm(s), re.I)
+    return m[1] if m else ""
+
+
+def _act_section(articles, name, wanted=None):
+    """The bill's amending articles on the act called `name`: from the article that cites it ("V Zakonu o …
+    (Uradni list …)") up to the next act's first article or the first article with a title (a provision of the
+    bill's own, not an amendment). With `wanted`, exactly those articles."""
+    if wanted:
+        keep = {_art(w.strip()) for w in wanted.split(",") if w.strip()}
+        return [(n, b) for n, b in articles if n in keep]
+    out = []
+    for n, b in articles:
+        cites = re.match(r"^V Zakonu o ", b)
+        if out and (cites or b.startswith("(")):
+            break
+        if out or (cites and _act_name(b.split(")", 1)[0]) == name):
+            out.append((n, b))
+    return out
+
+
+def _one_line(s):
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _quoted(body):
+    """The body with each top-level »…« replaced by ⟦i⟧, and the quoted texts."""
+    out, quotes, depth, buf = "", [], 0, ""
+    for ch in body:
+        if ch == "»":
+            if depth:
+                buf += ch
+            depth += 1
+        elif ch == "«" and depth:
+            depth -= 1
+            if depth:
+                buf += ch
+            else:
+                out += f"⟦{len(quotes)}⟧"
+                quotes.append(buf)
+                buf = ""
+        elif depth:
+            buf += ch
+        else:
+            out += ch
+    return out, quotes
+
+
+def _numbered(text):
+    """Split a new text into its paragraphs (1), (2) … : a marker counts only in sequence, so a reference to
+    'točka (12)' inside a sentence doesn't start a paragraph."""
+    text, starts, n, pos = _one_line(text), [], 1, 0
+    while (m := re.compile(rf"(?:^|(?<= ))\({n}\) ").search(text, pos)):
+        starts.append(m.start())
+        pos, n = m.end(), n + 1
+    if not starts:
+        return [text] if text else []
+    head = [text[:starts[0]].strip()] if starts[0] else []
+    return head + [text[a:b].strip() for a, b in zip(starts, starts[1:] + [len(text)])]
+
+
+def _new_article(text):
+    """(title, paragraphs) of an article quoted in the bill."""
+    text = _one_line(text)
+    m = re.match(rf"^{ART} člen (\([^()]*\) )?", text)
+    if m:
+        return (m[1] or "").strip(), _numbered(text[m.end():])
+    return "", _numbered(text)
+
+
+def _render_article(num, title, paras):
+    return " ".join(x for x in [f"{num} člen", title, *paras] if x)
+
+
+ORDINALS = ["prv", "drug", "tretj", "četrt", "pet", "šest", "sedm", "osm", "devet", "deset", "enajst", "dvanajst",
+            "trinajst", "štirinajst", "petnajst", "šestnajst", "sedemnajst", "osemnajst", "devetnajst", "dvajset"]
+ORD = rf"(?:{'|'.join(sorted(ORDINALS, key=len, reverse=True))})(?:i|em|ega|im|a|e|o|ih|ima)?\b"
+ORDS = rf"{ORD}(?:(?:, | in | do ){ORD})*"  # "tretji, četrti in peti", "osmi do enajsti"
+WORDS = r"(?:besedilo|beseda|besedi|besede|stopnja|število|znesek|kratica|letnica|datum)"
+WITH = r"(?:besedilom|besedo|besedama|besedami|stopnjo|številom|zneskom|kratico|letnico|datumom)"
+NUMBERED = re.compile(r"^\((\d+)\) ")
+
+
+def _ordinal(word):
+    word = word.lower()
+    return next(i + 1 for i, s in sorted(enumerate(ORDINALS), key=lambda x: -len(x[1])) if word.startswith(s))
+
+
+def _ordinals(text):
+    """'Tretji, četrti in peti' -> [3, 4, 5]; 'osmi do enajsti' -> [8, …, 11]."""
+    ns = [_ordinal(w) for w in re.findall(ORD, text, re.I)]
+    return list(range(ns[0], ns[1] + 1)) if " do " in text and len(ns) == 2 else ns
+
+
+def _nth(n):
+    return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10 if n not in (11, 12, 13) else 0, 'th')}"
+
+
+class _Article:
+    """An article being amended: its title and paragraphs, each remembering its number in the law in force, as the
+    bill names paragraphs by the numbers they had before the change ("dosedanji sedmi odstavek")."""
+
+    def __init__(self, art):
+        self.title, self.paras = art["title"], []
+        for p in art["paras"]:
+            m = NUMBERED.match(p)
+            self.paras.append({"old": int(m[1]) if m else None, "numbered": bool(m), "text": p[m.end():] if m else p})
+
+    def index(self, n):
+        i = next((i for i, p in enumerate(self.paras) if p["old"] == n), None)
+        if i is None:
+            raise Unparsed(f"no {_nth(n)} paragraph in the consolidated text")
+        return i
+
+    def new_number(self, n):
+        """The number the old n-th paragraph has now, or None if it was struck out."""
+        k = 0
+        for p in self.paras:
+            k += p["numbered"]
+            if p["old"] == n:
+                return k
+        return None
+
+    def rendered(self):
+        out, k = [], 0
+        for p in self.paras:
+            k += p["numbered"]
+            out.append(f"({k}) {p['text']}" if p["numbered"] else p["text"])
+        return self.title, out
+
+
+def _replace_text(text, old, new, where):
+    old = _one_line(old)
+    n = text.count(old)
+    if n == 0:
+        raise Unparsed(f"»{old}« is not in the {where}")
+    if n > 1:
+        raise Unparsed(f"»{old}« stands {n} times in the {where}")
+    text = text.replace(old, _one_line(new), 1)
+    return re.sub(r" +([,.;:])", r"\1", re.sub(r"  +", " ", text)).strip()
+
+
+def _new_paras(text):
+    return [{"old": None, "numbered": bool(NUMBERED.match(p)), "text": NUMBERED.sub("", p)} for p in _numbered(text)]
+
+
+def _apply(body, law):
+    """{law article: (before, after)} for one amending article; before/after are (title, paragraphs) or None.
+    It reads the set phrasings of Slovenian amending acts ("se spremeni tako, da se glasi", "se črta", "za … se
+    doda", "se nadomesti z") and raises Unparsed on anything else, or on a change it can't place exactly."""
+    body = _one_line(body)
+    body = re.sub(r"^V Zakonu o [^(]*\((?:[^()]|\([^()]*\))*\) ", "", body)  # the act's citation in the first article
+    text, quotes = _quoted(body)
+    sentences = [s.strip() for s in re.split(r"(?<=[.⟧])\s+(?=[A-ZČŠŽ0-9])", text) if s.strip()]
+    changes, work, checks, cur = {}, {}, [], None
+
+    def article(num):
+        if num not in law:
+            raise Unparsed(f"{num} člen is not in the consolidated text")
+        return law[num]
+
+    def quote(i):
+        return quotes[int(i)]
+
+    for s in sentences:
+        s = s.rstrip(".").strip()
+        if re.fullmatch(r"\d+", s) or s == s.upper():
+            continue  # a section heading run into the article's last paragraph
+        m = re.match(rf"^(?:se )?({ART}) člen (?:se )?spremeni tako, da se glasi:? ⟦(\d+)⟧$", s, re.I)
+        if m:
+            a = article(m[1])
+            changes[m[1]] = ((a["title"], a["paras"]), _new_article(quote(m[2])))
+            continue
+        m = re.match(rf"^(?:se )?({ART}) člen (?:se )?črta$", s, re.I)
+        if m:
+            a = article(m[1])
+            changes[m[1]] = ((a["title"], a["paras"]), None)
+            continue
+        m = re.match(rf"^(?:se )?za ({ART}) členom (?:se )?doda nov ({ART}) člen, ki se glasi:? ⟦(\d+)⟧$", s, re.I)
+        if m:
+            changes[m[2]] = (None, _new_article(quote(m[3])))
+            continue
+        # an instruction inside an article: first where (article, paragraph, title), then what
+        m = re.match(rf"^(?:se )?v ({ART}) členu,? ", s, re.I)
+        if m:
+            cur, s = m[1], s[m.end():]
+        if cur is None:
+            raise Unparsed(f"phrasing not handled: {s[:100]}")
+        if cur not in work:
+            work[cur] = _Article(article(cur))
+        art, scope = work[cur], None
+        m = re.match(rf"^(?:se )?v (?:dosedanj\w+ )?({ORD}) odstavku(?:, ki postane ({ORD}) odstavek,)? ", s, re.I)
+        if m:
+            scope, s = art.index(_ordinal(m[1])), s[m.end():]
+            if m[2]:
+                checks.append((_ordinal(m[1]), _ordinal(m[2])))
+        elif m := re.match(r"^(?:se )?v besedilu člena, ki se označi kot prvi odstavek,? ", s, re.I):
+            if len(art.paras) != 1 or art.paras[0]["numbered"]:
+                raise Unparsed("the article is not one unnumbered paragraph")
+            art.paras[0].update(numbered=True, old=1)
+            scope, s = 0, s[m.end():]
+        elif m := re.match(r"^(?:se )?v naslovu člena ", s, re.I):
+            scope, s = "title", s[m.end():]
+        s = re.sub(r"^se ", "", s)
+
+        def edit(old, new):
+            if scope == "title":
+                art.title = "(" + _replace_text(art.title.strip("()"), old, new, "title") + ")"
+                return
+            i = scope
+            if i is None:
+                if len(art.paras) != 1:
+                    raise Unparsed(f"no paragraph named for »{_one_line(old)}«")
+                i = 0
+            where = f"{_nth(art.paras[i]['old'])} paragraph" if art.paras[i]["old"] else "article"
+            art.paras[i]["text"] = _replace_text(art.paras[i]["text"], old, new, where)
+
+        m = re.match(rf"^(?:črta(?:ta|jo)? {WORDS} ⟦(\d+)⟧|{WORDS} ⟦(\d+)⟧ (?:se )?črta(?:ta|jo)?)$", s, re.I)
+        if m:
+            edit(quote(m[1] or m[2]), "")
+            continue
+        m = re.match(rf"^{WORDS} ⟦(\d+)⟧ (?:se )?nadomesti(?:ta|jo)? (?:z|s) {WITH} ⟦(\d+)⟧$", s, re.I)
+        if m:
+            edit(quote(m[1]), quote(m[2]))
+            continue
+        if scope is not None:
+            raise Unparsed(f"phrasing not handled: {s[:100]}")
+        m = re.match(rf"^({ORDS}) odstav\w+ (?:se )?črta(?:ta|jo)?$", s, re.I)
+        if m:
+            gone = {art.index(n) for n in _ordinals(m[1])}
+            art.paras = [p for i, p in enumerate(art.paras) if i not in gone]
+            continue
+        m = re.match(rf"^({ORD}) odstavek (?:se )?spremeni tako, da se glasi:? ⟦(\d+)⟧$", s, re.I)
+        if m:
+            i, new = art.index(_ordinal(m[1])), _new_paras(quote(m[2]))
+            if len(new) != 1:
+                raise Unparsed("one paragraph replaced by several")
+            art.paras[i]["text"] = new[0]["text"]
+            continue
+        m = re.match(rf"^za ({ORD}) odstavkom (?:se )?doda(?:ta|jo)? nov\w* ({ORDS}) odstav\w+, ki se glas\w+:? ⟦(\d+)⟧$",
+                     s, re.I)
+        if m:
+            i = art.index(_ordinal(m[1]))
+            art.paras[i + 1:i + 1] = _new_paras(quote(m[3]))
+            continue
+        m = re.match(rf"^dosedanj\w+ ({ORDS}) odstav\w+ postane(?:ta|jo)? ({ORDS}) odstav\w+$", s, re.I)
+        if m:
+            olds, news = _ordinals(m[1]), _ordinals(m[2])
+            if len(olds) != len(news):
+                raise Unparsed(f"can't read the renumbering: {s[:80]}")
+            checks += zip(olds, news)
+            continue
+        raise Unparsed(f"phrasing not handled: {s[:100]}")
+    for num, art in work.items():
+        for old, new in checks:  # the bill states the new numbers: they must agree with the changes worked out
+            got = art.new_number(old)
+            if got != new:
+                raise Unparsed(f"the bill makes the old {_nth(old)} paragraph the {_nth(new)}, lawdiff "
+                               f"{'the ' + _nth(got) if got else 'struck it out'}")
+        a = law[num]
+        changes[num] = ((a["title"], a["paras"]), art.rendered())
+    return changes
+
+
+def _abbr(title, lines):
+    m = re.search(r"\(([A-ZČŠŽ][A-Za-zČŠŽčšž]*(?:-\d+[A-Za-z]*)?)\)", title or "") or \
+        next((m for ln in lines[:30] if (m := re.search(r"\(([A-ZČŠŽ]{2,}[A-Za-zČŠŽčšž]*(?:-\d+[A-Za-z]*)?)\)", ln))), None)
+    return m[1] if m else ""
+
+
+def cmd_lawdiff(a):
+    folder = Path(a.folder)
+    bill_path, bill_lines = load_lines(a.bill)
+    law_path, law_lines = load_lines(a.law)
+    meta = lambda p: json.loads(p.with_suffix(".json").read_text(encoding="utf-8")) if p.with_suffix(".json").exists() else {}
+    bmeta, lmeta = meta(bill_path), meta(law_path)
+    law_abbr = _abbr(lmeta.get("title", ""), law_lines) or law_path.stem
+    bill_abbr = _abbr(bmeta.get("title", ""), bill_lines) or bill_path.stem
+    law = _law_articles(law_lines)
+    name = _act_name(lmeta.get("title", "")) or _act_name(next((ln for ln in law_lines if _act_name(ln)), ""))
+    section = _act_section(_bill_articles(bill_lines), name, a.articles)
+    if not section:
+        sys.exit(f"no article of the bill cites the act '{name}' as 'V Zakonu {name} (Uradni list …)': "
+                 "name the amending articles with --articles")
+    law_url, bill_url = lmeta.get("url", str(law_path)), bmeta.get("url", str(bill_path))
+    out_lines = [f"{law_abbr} as amended by {bill_abbr}, article by article. The text in force is the consolidated "
+                 f"text ({law_url}); the amended text is worked out by evidence.py lawdiff from the bill ({bill_url}), "
+                 "so quote it together with the amending article from the bill."]
+    report, parsed = [], 0
+    for num, body in section:
+        by = f"{num} člen {bill_abbr}"
+        try:
+            changes = _apply(body, law)
+        except Unparsed as e:
+            text, _ = _quoted(re.sub(r"^V Zakonu o [^(]*\((?:[^()]|\([^()]*\))*\) ", "", _one_line(body)))
+            ref = re.search(rf"({ART}) člen", text)
+            target = ref[1] if ref else "?"
+            out_lines += [f"== {target} člen {law_abbr}, amended by {by}: unparsed ({e})",
+                          f"current article: {target} člen {law_abbr} in force",
+                          _render_article(target, law[target]["title"], law[target]["paras"]) if target in law
+                          else "(not in the consolidated text)",
+                          f"amending article: {by}", f"{num} člen {_one_line(body)}"]
+            report.append(f"{target} člen: unparsed (by {num} člen): {e}")
+            continue
+        parsed += 1
+        for target, (before, after) in changes.items():
+            how = "added" if before is None else "amended"
+            out_lines += [f"== {target} člen {law_abbr}, {how} by {by}: parsed",
+                          f"before: {target} člen {law_abbr} in force",
+                          _render_article(target, *before) if before else "(none: a new article)",
+                          f"after: {target} člen {law_abbr} as amended by {by}, worked out by lawdiff",
+                          _render_article(target, *after) if after else "(deleted)"]
+            report.append(f"{target} člen: parsed (by {num} člen)")
+    dest = folder / "evidence" / "files" / "lawdiff"
+    dest.mkdir(parents=True, exist_ok=True)
+    txt = dest / (re.sub(r"[^A-Za-z0-9čšžČŠŽ.-]+", "-", f"{law_abbr}-{bill_abbr}") + ".txt")
+    txt.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+    rel = lambda p: os.path.relpath(p.resolve(), folder.resolve())
+    info = {"url": law_url, "bill_url": bill_url, "law_file": rel(law_path), "bill_file": rel(bill_path),
+            "fetched": lmeta.get("fetched") or datetime.date.today().isoformat(), "kind": "lawdiff",
+            "title": f"{law_abbr} as amended by {bill_abbr}", "paragraphs": len(out_lines),
+            "amending_articles": len(section), "parsed": parsed}
+    txt.with_suffix(".json").write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"cached: {txt.relative_to(folder)}  [{parsed} of {len(section)} amending articles parsed]")
+    for r in report:
+        print(r)
+    if parsed < len(section):
+        print("An unparsed article is shown as both full texts: the article in force and the amending article.")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1455,6 +1845,12 @@ def main():
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_calc)
 
+    p = sub.add_parser("lawdiff", help="line up a bill's amending articles with the consolidated law, before and after")
+    p.add_argument("folder")
+    p.add_argument("bill", help="cached text of the bill (or amending act)")
+    p.add_argument("law", help="cached text of the consolidated law it amends (PIS, reference/sites.md)")
+    p.add_argument("--articles", help="the bill's amending articles to use, e.g. 15,16,17 (default: the act's section)")
+    p.set_defaults(fn=cmd_lawdiff)
     p = sub.add_parser("numbers", help="check the numbers in case files' Claims and responses against their Evidence")
     p.add_argument("folder")
     p.add_argument("files", nargs="+", metavar="case_file")
