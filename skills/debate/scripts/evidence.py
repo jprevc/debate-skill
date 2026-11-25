@@ -24,6 +24,8 @@ Subcommands (run with -h for options):
   lawdiff <folder> <bill> <law>         line up a Slovenian bill's amending articles with the consolidated law (PIS):
                                         each article in force and as amended -> evidence/files/lawdiff/<law>-<bill>.txt
                                         (an article it can't apply is marked unparsed and shown as both full texts)
+  numbers <folder> <case file> [...]    NUMBER lines: numbers in a Claim or response that none of the Evidence in its
+                                        header or body states (advisory; fix with calc, a citation or the number)
   verify <folder> [ID ...] [--live]     check each Evidence quote against its cached source and/or the live URL,
                                         and recompute each calc
                                         (live: exact | partial | missing | unreachable, or unchanged when the
@@ -1177,6 +1179,53 @@ def cmd_calc(a):
     print(f"wrote evidence/{a.id}.md: {shown} = {res}")
 
 
+def case_items(text):
+    """The Claims and responses of a case file: (header line number, Evidence IDs in the header, first body line
+    number, body). A body runs from the line after its header to the next Claim, response, Evidence Request or
+    heading."""
+    import ledger
+    head = re.compile(rf"^(?:\*\*(?:Re |R-)?{ledger.CID}\b|#)")
+    items, cur = [], None
+    for i, ln in enumerate(text.splitlines(), 1):
+        if head.match(ln):
+            m = ledger.CLAIM_ANY_RE.match(ln) or ledger.RESP_ANY_RE.match(ln)
+            cur = [i, ledger.ID_RE.findall(m["rest"]), i + 1, []] if m else None
+            if cur:
+                items.append(cur)
+        elif cur:
+            cur[3].append(ln)
+    return [(i, ids, b, "\n".join(body)) for i, ids, b, body in items]
+
+
+def cmd_numbers(a):
+    """NUMBER lines for the Claims and responses of case files: numbers in a body that none of the Evidence in its
+    header, or cited in its body, states. Advisory: the Advocate fixes them before the Turn ends."""
+    import numcheck
+    folder = work_dir(a.folder)
+    evdir = folder / "evidence"
+    total = bad_items = bad_numbers = 0
+    for arg in a.files:
+        f = Path(arg) if Path(arg).exists() else folder / arg
+        if not f.exists():
+            sys.exit(f"{arg}: no such case file")
+        for _, cites, start, body in case_items(f.read_text(encoding="utf-8")):
+            cites = list(dict.fromkeys(cites + [x or y for x, y in numcheck.LINK_RE.findall(body)]))
+            if not any((evdir / f"{e}.md").exists() for e in cites):
+                continue  # a Value Claim or a Concession with no Evidence: nothing to check against
+            total += 1
+            by_line = {}  # one NUMBER line per line of the file, for all its sentences
+            for line, bad, ids in numcheck.unmatched(body, evdir, cites, start):
+                got = by_line.setdefault(line, ({}, {}))
+                got[0].update(dict.fromkeys(bad))
+                got[1].update(dict.fromkeys(ids))
+            for line, (bad, ids) in by_line.items():
+                print(numcheck.problem(f.name, line, list(bad), list(ids)))
+            bad_items += bool(by_line)
+            bad_numbers += sum(len(bad) for bad, _ in by_line.values())
+    print(f"{bad_numbers} numbers in none of their Evidence, in {bad_items} of the {total} Claims and responses "
+          "that cite Evidence")
+
+
 def _calc_verify(folder, fm):
     """recomputed | differs: … | input: … for a calc Evidence file."""
     try:
@@ -1802,6 +1851,10 @@ def main():
     p.add_argument("law", help="cached text of the consolidated law it amends (PIS, reference/sites.md)")
     p.add_argument("--articles", help="the bill's amending articles to use, e.g. 15,16,17 (default: the act's section)")
     p.set_defaults(fn=cmd_lawdiff)
+    p = sub.add_parser("numbers", help="check the numbers in case files' Claims and responses against their Evidence")
+    p.add_argument("folder")
+    p.add_argument("files", nargs="+", metavar="case_file")
+    p.set_defaults(fn=cmd_numbers)
 
     p = sub.add_parser("archive", help="snapshot quoted web pages in the Wayback Machine (needs EVIDENCE_ARCHIVE=1)")
     p.add_argument("folder")

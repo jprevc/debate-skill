@@ -10,6 +10,7 @@ The orchestrator's message gives you:
 - **Skill dir**
 - **Batch number**
 - **Evidence IDs**: the IDs to audit.
+- **Figures** (only for calcs made at Finish): the figure id and value each calc is for.
 
 Read these:
 
@@ -27,6 +28,8 @@ First run `python3 <skill dir>/scripts/evidence.py verify <folder> <your IDs…>
 - `archived <date>: exact` settles **Quote found** as `yes` the same way, because a copy kept by a third party shows the source said it. Write in Notes "live site unreachable; checked against the archived copy of <date>" with the snapshot URL from the note column. A snapshot dated before the Evidence's `accessed` date may predate the quoted text, so for `archived … partial` or `missing` do step 1 by hand: retry the live site, and mark `no` only if neither the site nor any snapshot has the quote.
 - For anything else, do step 1 by hand. A `missing` quote is often a reformatted table or a paraphrase, so check which it is.
 - A **calc** (`kind: calc`) shows `recomputed` when its inputs still stand in their Evidence and the result is unchanged: Quote found is `yes`. Anything else is `no`. Skip steps 1 and 2. In step 3, read its `Method:` line and the passage `calc` printed for each input (it is the one the `at:` line picked, when there is one): do they share the year, unit, area and population the formula assumes, and does the Claim use the result for what it measures? Cherry-picked is `no` unless an input was picked over another the sources give for the same thing. Its Source Tier is the lowest tier among its inputs.
+  - A calc that adjusts for prices (`amount * index / index`) uses one index for both periods: the same index (CPI or HICP, not one of each), area, group and base year, and the base year is stated. An annual amount goes with an annual average; a single month in its place is named as one in the `Method:`, otherwise Supports is `partly`. A spending category deflated with the all-items index, or the other way round, goes in Notes.
+- A calc made at Finish (`stage: finish`, `E-PRIMARY-…`) states a value in a chart, and no Claim cites it. Read that figure in `figures.json` (your dispatch's `Figures:` line names it): its title, unit, caption and the series that plots the value. In step 3, judge whether the figure uses the result for what it measures, and write it as `figure <id> yes`, `partly` or `no`, with a reason. A caption that stretches the value counts as `partly`.
 
 1. **Reopen the source.** Use `evidence.py fetch` with distinctive words from the quote, or `search` on the file in `evidence/files/`. Add `--render` when the `source_file` ends in `-rendered.txt`, or when a plain fetch returns almost no text. Look for the verbatim quote.
    - **Quote found** is `yes` when the quote appears exactly. Whitespace and formatting differences don't count against it.

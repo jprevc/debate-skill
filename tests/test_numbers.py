@@ -1,4 +1,5 @@
-"""The NUMBER check (numcheck.py, run by report_html.py) on Report prose and figure values, and evidence.py calc.
+"""The NUMBER check (numcheck.py, run by report_html.py) on Report prose and figure values, evidence.py calc,
+and evidence.py numbers on case files.
 
 Run: uv run --with markdown==3.7 --with pytest==9.2.0 pytest tests
 """
@@ -129,6 +130,49 @@ class Calc(unittest.TestCase):
         self.assertIn("uses no Evidence", self.calc("2 + 2").stderr)
         self.assertIn("only numbers", self.calc("E-PRO-004:36.83 + __import__('os').getpid()").stderr)
         self.assertFalse((self.folder / "evidence" / "E-PRO-006.md").exists())
+
+
+class Numbers(unittest.TestCase):
+    """evidence.py numbers: the NUMBER check of an Advocate's own Claims and responses, run before a Turn ends."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.folder = Path(self.tmp.name)
+        ev = self.folder / "evidence"
+        ev.mkdir()
+        (ev / "E-CON-001.md").write_text(evidence("E-CON-001", "Strošek: 79,6 mio EUR."), encoding="utf-8")
+        (ev / "E-PRO-002.md").write_text(evidence("E-PRO-002", "Lani 12 %."), encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def numbers(self, text, name="2-rebuttal-pro.md"):
+        (self.folder / name).write_text(text, encoding="utf-8")
+        r = subprocess.run([sys.executable, str(SCRIPTS / "evidence.py"), "numbers", str(self.folder), name],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout.splitlines()
+
+    def test_a_claim_body_is_checked_against_the_evidence_in_its_header(self):
+        out = self.numbers("# Rebuttal\n\n## Cost\n\n"
+                           "**PRO-3** · Dimension: Cost · Type: Factual · Evidence: E-CON-001\n"
+                           "It costs EUR 80 million. My sum gives EUR 75 million.\n")
+        self.assertEqual(out[0], "NUMBER 2-rebuttal-pro.md:6: 75 is in none of E-CON-001")
+
+    def test_a_response_is_checked_against_its_header_and_the_evidence_its_body_cites(self):
+        out = self.numbers("# Rebuttal\n\n## Cost\n\n"
+                           "**Re CON-1** · Mitigate · Evidence: E-CON-001\n"
+                           "The cost is EUR 80 million. Last year 12%. Now 14% (E-PRO-002).\n\n"
+                           "**Re CON-2** · Concede\n"
+                           "Con is right that 99 people are affected.\n\n"
+                           "**PRO-4 (restated)** · Dimension: Cost · Type: Inference · Evidence: E-PRO-002\n"
+                           "A rate of 12%, not 13%. Nor 16%.\n\n"
+                           "## Evidence Requests\n\n"
+                           "**R-PRO-1** · Priority: critical · For: PRO-4\n"
+                           "Needed: the 2024 rate of 15% (E-PRO-002).\n")
+        self.assertEqual(out, ["NUMBER 2-rebuttal-pro.md:6: 14 is in none of E-PRO-002, E-CON-001",
+                               "NUMBER 2-rebuttal-pro.md:12: 13, 16 are in none of E-PRO-002",
+                               "3 numbers in none of their Evidence, in 2 of the 2 Claims and responses that cite Evidence"])
 
 
 class Figures(unittest.TestCase):
