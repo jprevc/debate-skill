@@ -161,7 +161,7 @@ Missing data.
 
 FIGURES = {"figures": [{"id": "cost", "dimension": "Cost", "type": "bar", "title": "Cost estimates", "unit": "EUR million",
                         "categories": ["Ministry", "Fiscal Council"],
-                        "series": [{"name": "Estimate", "values": [53, 80], "evidence": ["E-CON-001", "E-CON-001"]}],
+                        "series": [{"name": "Estimate", "values": [53, 80], "evidence": ["E-PRO-001", "E-CON-001"]}],
                         "pins": [{"side": "con", "at": "Fiscal Council"}], "emphasis": ["Fiscal Council"]}]}
 
 
@@ -173,7 +173,8 @@ class ShortReport(unittest.TestCase):
         (agent / "evidence").mkdir(parents=True)
         out.mkdir()
         (agent / "motion.md").write_text(MOTION, encoding="utf-8")
-        (agent / "evidence" / "E-PRO-001.md").write_text(evidence("E-PRO-001"), encoding="utf-8")
+        (agent / "evidence" / "E-PRO-001.md").write_text(
+            evidence("E-PRO-001", quote="Ministrstvo ocenjuje 53 mio EUR."), encoding="utf-8")
         (agent / "evidence" / "E-CON-001.md").write_text(
             evidence("E-CON-001", quote="Ocena: 79,6 mio EUR na leto."), encoding="utf-8")
         (agent / "evidence" / "E-CON-002.md").write_text(evidence("E-CON-002", "failed"), encoding="utf-8")

@@ -1,6 +1,6 @@
 """Numbers in prose, read the way an English or Slovenian writer means them, and matched against the numbers
-in the Evidence a sentence cites. Used by report_html.py and short_html.py (the NUMBER check) and by
-evidence.py calc.
+in the Evidence a sentence cites. Used by report_html.py and short_html.py (the NUMBER check of the Report's
+prose and of the figure values in figures.json) and by evidence.py calc.
 
 A number in the Report matches a number in an Evidence file when they are the same quantity once the scale
 word ("million", "mio", "milijard" …) is applied, and the Evidence's number rounds to the Report's number at
@@ -11,6 +11,7 @@ import re
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
+PCT_AFTER = re.compile(r"(?:%|odstot|percent|per cent)", re.I)
 # scale words after a number, matched at a word start
 SCALES = [
     (re.compile(r"(?:thousands?|k\b|tisoč\w*|tis\.)", re.I), Decimal(10) ** 3),
@@ -34,12 +35,12 @@ LINK_RE = re.compile(rf"\[({EVID})\]\([^)]*\)|\b({EVID})\b")
 
 
 class Num:
-    """One number as written, with every (value, decimals) it can mean ("1,200" is 1200 or 1.2) and the scale
-    word after it."""
-    __slots__ = ("text", "start", "values", "scale")
+    """One number as written, with every (value, decimals) it can mean ("1,200" is 1200 or 1.2), the scale
+    word after it, and whether a percent sign or word follows it."""
+    __slots__ = ("text", "start", "values", "scale", "pct")
 
-    def __init__(self, text, start, values, scale):
-        self.text, self.start, self.values, self.scale = text, start, values, scale
+    def __init__(self, text, start, values, scale, pct=False):
+        self.text, self.start, self.values, self.scale, self.pct = text, start, values, scale, pct
 
     def __repr__(self):
         return f"Num({self.text!r}, {sorted(str(v) for v, _ in self.values)}, scale={self.scale})"
@@ -96,7 +97,7 @@ def numbers(text, quantities_only=True):
         # the scale word after the number, or after the end of its range ("EUR 234-257 million")
         rest = re.sub(r"^\s*[-–]\s*\d[\d.,]*", "", masked[m.end():m.end() + 30]).lstrip()
         scale = next((mult for rx, mult in SCALES if rx.match(rest)), Decimal(1))
-        found.append(Num(m["num"], m.start(), vals, scale))
+        found.append(Num(m["num"], m.start(), vals, scale, bool(PCT_AFTER.match(rest))))
     return found
 
 
@@ -129,6 +130,38 @@ def evidence_numbers(text, translation=True):
     """Every number in an Evidence file's Quote and Context (both verbatim from the source), and its Translation."""
     names = ("Quote", "Context") + (("Translation",) if translation else ())
     return [n for name in names for n in numbers(section(text, name), quantities_only=False)]
+
+
+# A figure in a percent unit may give 37 for the Evidence's fraction 0.37, and one in a share unit 0.37 for its
+# 37 %. Other units get no such factor: a scale word converts exactly ("17,9 tisoč" is 17900), and a bare factor
+# of 100 or 1000 would let a figure's 6400 or 48000 pass on any "64" or "48" in the Evidence.
+PERCENT_UNIT = re.compile(r"%|\bper ?cent|\bodstot", re.I)
+SHARE_UNIT = re.compile(r"\b(?:share|rate|ratio|fraction|delež\w*|stopnj\w*)\b", re.I)
+
+
+def unit_scale(unit):
+    """The scale word in a figure's unit ("EUR million" → 10**6), or 1."""
+    for m in re.finditer(r"\b(?=\w)", unit or ""):
+        for rx, mult in SCALES:
+            if rx.match(unit, m.start()):
+                return mult
+    return Decimal(1)
+
+
+def value_matches(v, unit, pool):
+    """Whether a figure value (a JSON number in the figure's unit, such as "EUR million") is one of the Nums in
+    pool, rounded to the value's precision (80.0 is read as 80); a percentage may be a fraction in the Evidence,
+    and a share a percentage (see PERCENT_UNIT)."""
+    d = Decimal(repr(v)).normalize()
+    num = lambda k: Num(str(v), 0, {(abs(d), max(0, -d.as_tuple().exponent))}, unit_scale(unit) * k)  # noqa: E731
+    if matches(num(1), pool):
+        return True
+    if PERCENT_UNIT.search(unit or ""):
+        fractions = [p for p in pool if not p.pct and all(abs(pv) <= 10 for pv, _ in p.values)]
+        return matches(num(Decimal("0.01")), fractions)
+    if SHARE_UNIT.search(unit or ""):
+        return matches(num(Decimal(100)), [p for p in pool if p.pct])
+    return False
 
 
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-ZČŠŽ(\"“„»*])")
