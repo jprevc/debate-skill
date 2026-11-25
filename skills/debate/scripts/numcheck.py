@@ -1,6 +1,7 @@
 """Numbers in prose, read the way an English or Slovenian writer means them, and matched against the numbers
 in the Evidence a sentence cites. Used by report_html.py and short_html.py (the NUMBER check of the Report's
-prose and of the figure values in figures.json) and by evidence.py calc.
+prose and of the figure values in figures.json), by evidence.py calc, and by evidence.py numbers (the same check
+of an Advocate's own Claims and responses).
 
 A number in the Report matches a number in an Evidence file when they are the same quantity once the scale
 word ("million", "mio", "milijard" …) is applied, and the Evidence's number rounds to the Report's number at
@@ -167,10 +168,11 @@ def value_matches(v, unit, pool):
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-ZČŠŽ(\"“„»*])")
 
 
-def check_prose(text, name, evdir):
-    """NUMBER problems: in each sentence (or table row) that cites Evidence, the numbers that none of the cited
-    Evidence files states. A sentence that cites nothing is not checked; nor is a fenced or HTML block."""
-    pools, problems = {}, []
+def unmatched(text, evdir, cites=(), start=1):
+    """(line number, [number text], [Evidence IDs]) for each sentence (or table row) whose numbers are in none of
+    the Evidence it cites, plus the Evidence IDs in cites; the first line of text is line start. A sentence that
+    cites nothing (and has no cites) is not checked; nor is a fenced or HTML block."""
+    pools = {}
 
     def pool(eid):
         if eid not in pools:
@@ -179,13 +181,13 @@ def check_prose(text, name, evdir):
         return pools[eid]
 
     fence = False
-    for i, line in enumerate(text.splitlines(), 1):
+    for i, line in enumerate(text.splitlines(), start):
         if line.lstrip().startswith("```"):
             fence = not fence
         if fence or line.lstrip().startswith("<"):
             continue
         for sent in [line] if line.lstrip().startswith("|") else SENTENCE_RE.split(line):
-            ids = list(dict.fromkeys(a or b for a, b in LINK_RE.findall(sent)))
+            ids = list(dict.fromkeys([a or b for a, b in LINK_RE.findall(sent)] + list(cites)))
             known = [p for e in ids if (p := pool(e)) is not None]
             if not known:
                 continue  # cites nothing, or only missing files (reported elsewhere)
@@ -193,6 +195,14 @@ def check_prose(text, name, evdir):
             flat = [n for p in known for n in p]
             bad = list(dict.fromkeys(n.text for n in numbers(prose) if not matches(n, flat)))
             if bad:
-                problems.append(f"NUMBER {name}:{i}: {', '.join(bad)} {'is' if len(bad) == 1 else 'are'} in none of "
-                                f"{', '.join(ids)}")
-    return problems
+                yield i, bad, ids
+
+
+def problem(name, line, bad, ids):
+    return f"NUMBER {name}:{line}: {', '.join(bad)} {'is' if len(bad) == 1 else 'are'} in none of {', '.join(ids)}"
+
+
+def check_prose(text, name, evdir):
+    """NUMBER problems: in each sentence (or table row) that cites Evidence, the numbers that none of the cited
+    Evidence files states. A sentence that cites nothing is not checked; nor is a fenced or HTML block."""
+    return [problem(name, i, bad, ids) for i, bad, ids in unmatched(text, evdir)]
