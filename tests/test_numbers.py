@@ -134,35 +134,48 @@ class Figures(unittest.TestCase):
         return [ln for ln in r.stdout.splitlines() if ln.startswith("FIGURE")]
 
     def test_a_bar_value_must_be_in_its_evidence(self):
-        bar = {"id": "cost", "type": "bar", "title": "Cost", "unit": "EUR million", "categories": ["Now", "Then"],
-               "series": [{"name": "Cost", "values": [80, 138], "evidence": ["E-CON-001", "E-CON-001"]}]}
-        self.assertEqual(self.build(bar), ["FIGURE cost: 138 is in none of E-CON-001"])
+        bar = {"id": "cost", "type": "bar", "title": "Cost", "unit": "EUR million", "categories": ["Now", "Then", "Never"],
+               "series": [{"name": "Cost", "values": [80.0, 138, 0], "evidence": ["E-CON-001", "E-CON-001", "E-CON-001"]}]}
+        self.assertEqual(self.build(bar), ["FIGURE cost: 138 is in none of E-CON-001"])  # a zero is not checked
 
     def test_line_points_are_checked_and_a_rate_may_be_a_share(self):
-        (self.ev / "E-PRO-002.md").write_text(evidence("E-PRO-002", "Rate 36,83 %, base 17,9 tisoč EUR (Art. 64)."), encoding="utf-8")
+        (self.ev / "E-PRO-002.md").write_text(evidence("E-PRO-002", "Rate 36,83 %, share 0,25, base 17,9 tisoč EUR (Art. 64)."),
+                                              encoding="utf-8")
         line = {"id": "rate", "type": "line", "title": "Rate", "unit": "share of the wage",
-                "series": [{"name": "Rate", "points": [[2025, 0.3683], [2026, 0.41]], "evidence": "E-PRO-002"}]}
+                "series": [{"name": "Rate", "points": [[2025, 0.3683], [2026, 0.41], [2027, 0.0025]], "evidence": "E-PRO-002"}]}
+        pct = {"id": "pct", "type": "bar", "title": "Rate", "unit": "% of the wage", "categories": ["A", "B", "C"],
+               "series": [{"name": "Rate", "values": [36.83, 25, 3683], "evidence": ["E-PRO-002"] * 3}]}
         # a scale word converts exactly; an amount is not a rate, so 6400 is not the "64" of Art. 64 times 100
-        bar = {"id": "base", "type": "bar", "title": "Base", "unit": "EUR", "categories": ["Base", "Tax"],
+        bar = {"id": "base", "type": "bar", "title": "Base", "unit": "EUR, corporate tax", "categories": ["Base", "Tax"],
                "series": [{"name": "Base", "values": [17900, 6400], "evidence": ["E-PRO-002", "E-PRO-002"]}]}
-        self.assertEqual(self.build(line, bar), ["FIGURE rate: 0.41 is in none of E-PRO-002",
-                                                 "FIGURE base: 6400 is in none of E-PRO-002"])
+        self.assertEqual(self.build(line, pct, bar), ["FIGURE rate: 0.41 is in none of E-PRO-002",
+                                                      "FIGURE rate: 0.0025 is in none of E-PRO-002",
+                                                      "FIGURE pct: 3683 is in none of E-PRO-002",
+                                                      "FIGURE base: 6400 is in none of E-PRO-002"])
 
     def test_a_computed_value_passes_through_a_calc_named_in_the_note_and_is_flagged_otherwise(self):
-        (self.ev / "E-CON-002.md").write_text(
-            "---\nid: E-CON-002\nadded_by: CON\nkind: calc\ntitle: Sum\npublisher: evidence.py calc\n"
-            "url: evidence/E-CON-002.md\n---\n\n## Quote\n\n> 79.6 + 183 = 262.6\n\n"
-            "## Audit\n\n- Result: passed\n- Quote found: yes\n- Supports: yes\n- Cherry-picked: no\n- Source Tier: A\n",
-            encoding="utf-8")
+        for eid, found in (("E-CON-002", "yes"), ("E-CON-003", "no")):
+            (self.ev / f"{eid}.md").write_text(
+                f"---\nid: {eid}\nadded_by: CON\nkind: calc\ntitle: Sum\npublisher: evidence.py calc\n"
+                f"url: evidence/{eid}.md\nresult: 262.6\n---\n\n## Quote\n\n> 79.6 + 183 + 12 = 262.6\n\n"
+                f"## Audit\n\n- Quote found: {found}\n- Supports: yes\n- Cherry-picked: no\n- Source Tier: A\n",
+                encoding="utf-8")
         fig = lambda fid, v, note: {"id": fid, "type": "bar", "title": "Total", "unit": "EUR million",  # noqa: E731
                                     "categories": ["Both"], **({"note": note} if note else {}),
                                     "series": [{"name": "Total", "values": [v], "evidence": ["E-CON-001"]}]}
         self.assertEqual(self.build(fig("calc", 263, "The sum of the two (E-CON-002)."),
+                                    fig("input", 12, "The sum of the two (E-CON-002)."),  # only the calc's result counts
+                                    fig("failed", 263, "The sum of the two (E-CON-003)."),
                                     fig("noted", 263, "Computed as the sum of the two."),
-                                    fig("typo", 236, "")),
-                         ["FIGURE noted: 263 is computed (see its note), in none of E-CON-001; "
+                                    fig("typo", 236, "Estimates from the ministry."),
+                                    fig("bare", 236, "")),
+                         ["FIGURE input: 12 is in none of E-CON-001",
+                          "FIGURE failed: E-CON-003 in its note failed the Audit",
+                          "FIGURE failed: 263 is in none of E-CON-001",
+                          "FIGURE noted: 263 is computed (see its note), in none of E-CON-001; "
                           "name in note a calc that states it, or list this line in your reply",
-                          "FIGURE typo: 236 is in none of E-CON-001"])
+                          "FIGURE typo: 236 is in none of E-CON-001",
+                          "FIGURE bare: 236 is in none of E-CON-001"])
 
 
 if __name__ == "__main__":

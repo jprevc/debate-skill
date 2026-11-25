@@ -31,8 +31,8 @@ Prints problems one per line, like ledger.py:
   FIGURE   a figure in figures.json is malformed or cites Evidence that is missing,
            failed the Audit or was never audited; or a bar value or line point (y) is in none
            of the Evidence it cites, even rounded and allowing for the unit (the NUMBER check):
-           "is computed (see its note)" when the figure has a note, unless the note names a
-           calc that states the value
+           "is computed (see its note)" when the note shows a computation, unless the note
+           names a calc whose result the value is
   CAPTION  a figure's caption or note states a number (a rate, or an amount of 100 or
            more) that is neither in the figure's data nor in its Evidence quotes
   STATUS   an Open Question in the Report lacks its "· Status: …" marker
@@ -273,7 +273,9 @@ def load_evidence(folder):
             "funder": audit_field(text, "Funder/affiliation"),
             "notes": audit_field(text, "Notes"),
             "kind": fm.get("kind", ""),
-            "numbers": numcheck.evidence_numbers(text),  # for the NUMBER check of figure values
+            # for the NUMBER check of figure values
+            "numbers": numcheck.evidence_numbers(text),
+            "calc_result": numcheck.numbers(fm.get("result", ""), quantities_only=False),
         }
     return ev
 
@@ -610,15 +612,24 @@ def check_figure(f, ev):
     return ok
 
 
+COMPUTED = re.compile(r"comput|calculat|izračun|derived|[=×÷]|\d\s*[-+*/]\s*\(?\d", re.I)  # a note that shows arithmetic
+
+
 def check_values(f, ev):
     """The NUMBER check of a figure: each bar value, and each line point's y value, must be in the Evidence it
     cites (Quote, Translation or Context), rounded to the value's precision and allowing for the unit. A value
-    in a calc that the note names passes; otherwise, in a figure with a note (where computations are explained),
-    it is reported as computed rather than as wrong."""
+    that is the result of a calc the note names passes; otherwise, when the note shows a computation, it is
+    reported as computed rather than as wrong. A zero is not checked."""
     unit = f.get("unit", "")
     note = f.get("note", "")
-    calcs = [n for i in dict.fromkeys(re.findall(EID, note)) if ev.get(i, {}).get("kind") == "calc"
-             for n in ev[i]["numbers"]]
+    calcs = []
+    for i in dict.fromkeys(re.findall(EID, note)):
+        if ev.get(i, {}).get("kind") != "calc":
+            continue
+        if ev[i]["audit"] in ("failed", "not audited"):
+            problems.append(f"FIGURE {f['id']}: {i} in its note {'failed the Audit' if ev[i]['audit'] == 'failed' else 'was never audited'}")
+        else:
+            calcs += ev[i]["calc_result"]
     for s in f["series"]:
         if f["type"] == "bar":
             pairs = [(v, ev_ids(e)) for v, e in zip(s.get("values", []), s.get("evidence", []))]
@@ -626,11 +637,11 @@ def check_values(f, ev):
             pairs = [(p[1], ev_ids(s.get("evidence"))) for p in s.get("points", []) if len(p) > 1]
         for v, ids in pairs:
             known = [i for i in ids if i in ev]
-            if v is None or not known or isinstance(v, bool) or not isinstance(v, (int, float)):
+            if not known or isinstance(v, bool) or not isinstance(v, (int, float)) or v == 0:
                 continue
             if numcheck.value_matches(v, unit, [n for i in known for n in ev[i]["numbers"]] + calcs):
                 continue
-            if note:
+            if COMPUTED.search(note):
                 problems.append(f"FIGURE {f['id']}: {v} is computed (see its note), in none of {', '.join(known)}; "
                                 "name in note a calc that states it, or list this line in your reply")
             else:
@@ -1091,7 +1102,7 @@ def main():
     title = re.match(r"^# (.+)$", report, re.M)
     title = title.group(1) if title else "Debate Report"
     cited = set(re.findall(EID, body + confrontation)) | {i for f in figs for i in fig_ids(f)}
-    evdata = {i: {k: v for k, v in ev[i].items() if k not in ("id", "side", "kind", "numbers")} for i in sorted(cited) if i in ev}
+    evdata = {i: {k: v for k, v in ev[i].items() if k not in ("id", "side", "kind", "numbers", "calc_result")} for i in sorted(cited) if i in ev}
     key = (f'<section id="figures"><h2>{esc(T("nav_figures"))}</h2><p class="lede">{esc(T("figures_lede"))}</p>'
            + "".join(general) + "</section>") if general else ""
     # the heading is the Report's own (neutral) title; the Motion is shown below it, labelled

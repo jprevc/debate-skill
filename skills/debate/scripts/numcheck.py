@@ -11,6 +11,7 @@ import re
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
+PCT_AFTER = re.compile(r"(?:%|odstot|percent|per cent)", re.I)
 # scale words after a number, matched at a word start
 SCALES = [
     (re.compile(r"(?:thousands?|k\b|tisoč\w*|tis\.)", re.I), Decimal(10) ** 3),
@@ -34,12 +35,12 @@ LINK_RE = re.compile(rf"\[({EVID})\]\([^)]*\)|\b({EVID})\b")
 
 
 class Num:
-    """One number as written, with every (value, decimals) it can mean ("1,200" is 1200 or 1.2) and the scale
-    word after it."""
-    __slots__ = ("text", "start", "values", "scale")
+    """One number as written, with every (value, decimals) it can mean ("1,200" is 1200 or 1.2), the scale
+    word after it, and whether a percent sign or word follows it."""
+    __slots__ = ("text", "start", "values", "scale", "pct")
 
-    def __init__(self, text, start, values, scale):
-        self.text, self.start, self.values, self.scale = text, start, values, scale
+    def __init__(self, text, start, values, scale, pct=False):
+        self.text, self.start, self.values, self.scale, self.pct = text, start, values, scale, pct
 
     def __repr__(self):
         return f"Num({self.text!r}, {sorted(str(v) for v, _ in self.values)}, scale={self.scale})"
@@ -96,7 +97,7 @@ def numbers(text, quantities_only=True):
         # the scale word after the number, or after the end of its range ("EUR 234-257 million")
         rest = re.sub(r"^\s*[-–]\s*\d[\d.,]*", "", masked[m.end():m.end() + 30]).lstrip()
         scale = next((mult for rx, mult in SCALES if rx.match(rest)), Decimal(1))
-        found.append(Num(m["num"], m.start(), vals, scale))
+        found.append(Num(m["num"], m.start(), vals, scale, bool(PCT_AFTER.match(rest))))
     return found
 
 
@@ -131,10 +132,11 @@ def evidence_numbers(text, translation=True):
     return [n for name in names for n in numbers(section(text, name), quantities_only=False)]
 
 
-# a figure in a share or rate unit may give 0.37 for the Evidence's 37 %, or 37 for its 0.37. Other units get no
-# such factor: a scale word converts exactly ("17,9 tisoč" is 17900), and a bare factor of 100 or 1000 lets a
-# figure's 6400 or 48000 pass on any "64" or "48" in the Evidence.
-RATE_UNIT = re.compile(r"%|percent|per cent|share|rate|ratio|fraction|odstot|delež|stopnj", re.I)
+# A figure in a percent unit may give 37 for the Evidence's fraction 0.37, and one in a share unit 0.37 for its
+# 37 %. Other units get no such factor: a scale word converts exactly ("17,9 tisoč" is 17900), and a bare factor
+# of 100 or 1000 would let a figure's 6400 or 48000 pass on any "64" or "48" in the Evidence.
+PERCENT_UNIT = re.compile(r"%|\bper ?cent|\bodstot", re.I)
+SHARE_UNIT = re.compile(r"\b(?:share|rate|ratio|fraction|delež\w*|stopnj\w*)\b", re.I)
 
 
 def unit_scale(unit):
@@ -148,12 +150,18 @@ def unit_scale(unit):
 
 def value_matches(v, unit, pool):
     """Whether a figure value (a JSON number in the figure's unit, such as "EUR million") is one of the Nums in
-    pool, rounded to the value's precision; a share may be a percentage (see RATE_UNIT)."""
-    d = Decimal(str(v))
-    vals = {(abs(d), max(0, -d.as_tuple().exponent))}
-    base = unit_scale(unit)
-    factors = (1, Decimal(100), Decimal("0.01")) if RATE_UNIT.search(unit or "") else (1,)
-    return any(matches(Num(str(v), 0, vals, base * k), pool) for k in factors)
+    pool, rounded to the value's precision (80.0 is read as 80); a percentage may be a fraction in the Evidence,
+    and a share a percentage (see PERCENT_UNIT)."""
+    d = Decimal(repr(v)).normalize()
+    num = lambda k: Num(str(v), 0, {(abs(d), max(0, -d.as_tuple().exponent))}, unit_scale(unit) * k)  # noqa: E731
+    if matches(num(1), pool):
+        return True
+    if PERCENT_UNIT.search(unit or ""):
+        fractions = [p for p in pool if not p.pct and all(abs(pv) <= 10 for pv, _ in p.values)]
+        return matches(num(Decimal("0.01")), fractions)
+    if SHARE_UNIT.search(unit or ""):
+        return matches(num(Decimal(100)), [p for p in pool if p.pct])
+    return False
 
 
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-ZČŠŽ(\"“„»*])")
