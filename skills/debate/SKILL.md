@@ -20,6 +20,7 @@ One debate per project folder, which keeps what the user supplied apart from wha
   sources/    the user's own files, exactly as they gave them; agents never write here
   agent/      the debate record, everything the agents made
   outputs/    report.md  report.html  confrontation.md  (report-<lang>.*  confrontation-<lang>.md for a Translated Report)
+              report-short.md  report-short.html   (report-short-<lang>.* too, for a Short Report)
               history/<N>/   the outputs a Revision replaced
 ```
 
@@ -36,6 +37,7 @@ agent/
   1-opening-<prefix>.md  2-rebuttal-<prefix>.md  4-rejoinder-<prefix>.md
   3-audit-batch-<N>.md  3-audit.md
   confrontation-check.md                the Checker's findings on the Confrontation
+  short-check.md                        the Checker's findings on the Short Report
   figures-<lang>.json  motion-<lang>.md   only for a Translated Report
   revision-<N>-verify.md                the live check of every Evidence at the start of Revision N
   history/<N>/                          the case files and Stage 6 files that Revision N replaced
@@ -164,6 +166,8 @@ When Stage 6 is done or skipped, update `README.md`: the status line ("finished"
 - the Judge's three-line summary of the main cruxes
 - every Evidence Request still unmet (`open`, `partial` or `unavailable`), each with its status; `outputs/report.html` lists them too, with what was tried
 
+Then offer a Short Report in one line: a one-page version of the Report with the detail a click away (see Short Report).
+
 If the user later supplies Evidence for one of those, add it and rerun from Stage 4a. That means a short audit, then a new Judgment and a new Confrontation. Anything bigger is a Revision.
 
 ## Revision
@@ -196,3 +200,12 @@ If the user asks for the Report in another language, dispatch one fresh `general
 - in the Confrontation, every turn with the same ID line and Evidence links, the Dimension headings as the translated Report names them, and the turn headers in the target language where `templates/confrontation.md` lists them (Slovenian: `**Za · Uvodni nastop**`), otherwise in English.
 
 Then run `python3 <skill dir>/scripts/ledger.py <folder>`, and have the translator fix any `CONFRONTATION` line about `confrontation-<lang>.md`; then run `uv run --script <skill dir>/scripts/report_html.py <folder> --lang <lang>`, which writes `outputs/report-<lang>.html`. If the Confrontation is written after a Report was already translated, translate it the same way then. Add the translated files to `README.md` (the Report rows, the `agent/` table and the rebuild commands). From then on, make every later fix to the Report or the Confrontation in both versions, and rebuild both.
+
+## Short Report
+
+Only when the user asks for it (a short, compact or one-page version of the Report). The full Report stays the main output.
+
+1. Dispatch a fresh `general-purpose` agent on the default model: `Read <skill dir>/prompts/summariser.md and follow it.`, with the Folder and the Skill dir. It writes `outputs/report-short.md` from `templates/report-short.md`, may add `pins` and `emphasis` to `agent/figures.json`, and builds `outputs/report-short.html` with `report_html.py --short`.
+2. Dispatch the Checker (`"sonnet"`) with `Target: short` and `Round: 1`. If it reports issues, send them to a fresh Summariser to fix (its brief reads `short-check.md` first), then run the Checker for round 2. Stop after round 2, and tell the user any issue still open.
+3. If the debate has a Translated Report, translate `report-short.md` into `report-short-<lang>.md` as in Translated Report: the same sections, cards, fields, Evidence links and pins, with section keys (`<!-- glance -->`) unchanged and the field labels in the target language where `short_html.py` lists them (Slovenian: Za, Proti, Kaj se spremeni …). Copy the `pins` into `figures-<lang>.json`, with each `at` category as that file names it. Build it with `report_html.py <folder> --short --lang <lang>`; it also checks that the translation mirrors `report-short.md`.
+4. Log it in `state.md`, add the Short Report rows to `README.md`, and give the user the path to `outputs/report-short.html`. From then on, a change to the Report that the short page repeats goes into both, and both are rebuilt.

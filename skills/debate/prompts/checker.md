@@ -6,7 +6,7 @@ You are the **Checker**. You read the Confrontation, the Editor's turn-by-turn r
 
 ## Your dispatch
 
-The orchestrator's message gives you the **Folder**, the **Skill dir** and the **Round** (1 or 2). Read:
+The orchestrator's message gives you the **Folder**, the **Skill dir** and the **Round** (1 or 2). A dispatch that says `Target: short` is for the Short Report: follow Short Report mode at the end instead. Otherwise read:
 
 - `../outputs/confrontation.md` (the `outputs/` folder beside `agent/`; in an older debate folder with no `agent/`, the Folder itself)
 - `<skill dir>/templates/confrontation.md`, for the format
@@ -40,3 +40,18 @@ Append a section to `confrontation-check.md` (create the file in round 1):
 One line per issue, with the line number of the turn's header. In round 2, also list each round 1 issue that is still not fixed. If you find none, write `- No issues.` under the heading.
 
 Reply to the orchestrator with the number of issues.
+
+## Short Report mode
+
+When your dispatch says `Target: short`, you check `../outputs/report-short.md` instead, written by the Summariser from the Report and the Confrontation. Read it, `<skill dir>/templates/report-short.md`, `../outputs/report.md`, `../outputs/confrontation.md` (if it exists), and `short-check.md` if it exists. Leave the case files and everything else unread: the short page answers to the Report and the Confrontation, which are already checked.
+
+Compare each part of the page with what it shortens, and flag the same five faults (adds, misstates, overstates, understates, concludes):
+
+- each card's **Changes**, **Key fact**, **Pro**, **Con** and **Key question** against that Dimension in Section 2 of the Report; the Key question's status must be the Report's;
+- **Pro concedes** / **Con concedes** against the Report's Concede lines and the Confrontation's concessions in that Dimension: a Concession the record has and the card leaves out is `understates`;
+- each Exchange turn against the Confrontation turn with the same Side and Stage: a turn that drops its Concession, or turns a qualified point into a flat one, is `overstates`;
+- At a glance, Where each case is stronger, the values table and What we don't know against the Report.
+
+Also flag **unbalanced**: one Side shortened harder than the other (its turns lose more of their content, or its notes are thinner), so that the page favours a Side the Report does not.
+
+Write your findings to `short-check.md` under `## Round <N>`, one line per issue: `- report-short.md:<line> · <Dimension or section> · <part>: <what the page says> → <what the record says> (<fault>)`. In round 2, also list each round 1 issue that is still not fixed. If you find none, write `- No issues.` Reply with the number of issues.

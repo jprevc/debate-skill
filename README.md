@@ -71,12 +71,14 @@ Run `/debate` again in a finished debate's folder to revise it rather than start
 .claude-plugin/        plugin and marketplace manifests
 skills/debate/         the skill itself (everything that gets installed)
   SKILL.md             orchestrator instructions
-  prompts/             Advocate, Auditor and Judge briefs
+  prompts/             Advocate, Auditor, Judge, Editor, Checker and Summariser briefs
   reference/           shared Evidence rules, site recipes, statistics sources, research papers
-  templates/           case, Evidence, audit, motion, state, report, methodology,
+  templates/           case, Evidence, audit, motion, state, report, short report, methodology,
                        project README.md and CLAUDE.md
   scripts/             evidence.py (fetch, quote, verify, papers, data, pxweb), ledger.py (checks),
-                       report_html.py (HTML report), render.py (headless Chromium)
+                       report_html.py (HTML report), short_html.py (Short Report, via report_html.py --short),
+                       render.py (headless Chromium)
+  assets/              fonts.css: the Short Report's embedded fonts (SIL OFL 1.1, see FONTS-LICENSE.md)
 tests/                 tests for the scripts (not installed); run them with
                        uv run --with markdown==3.7 --with pytest==9.2.0 pytest tests
 GLOSSARY.md, docs/     domain glossary, ADRs and agent docs for developing the skill
