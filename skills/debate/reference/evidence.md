@@ -58,6 +58,7 @@ python3 <skill dir>/scripts/evidence.py calc <folder> "E-CON-B-040:5159.12 / (1 
 ```
 
 - Write each input as `<Evidence ID>:<number>`, copied from that Evidence's Quote or Context as a plain decimal: `36,83 %` is `36.83`, `1.195 mio EUR` is `1195`. Any other number in the formula is a constant (`100`, `12` months). Formulas use `+ - * / **` and brackets.
+- When the number stands in more than one place in its Evidence (a long act, a table), `calc` lists the places and asks which: add `--at "<ID>:<number>=<words next to it>"`, with words from that passage, ideally including the number (`--at "E-PRIMARY-001:45=45 % minimalne letne plače"`). An input used twice for two passages with the same number gets one `--at` for each.
 - `calc` refuses an input that is not in its Evidence, an input that failed the Audit, and anything that is not arithmetic. It writes the formula and its result as the Quote, and each input with the passage it stands in.
 - `--method` says what each input is and why the formula combines them that way: the same year, unit and population, or how they differ. The Auditor checks exactly that.
 - A Claim that rests on a calc is an Inference: cite the calc, and the Evidence of the inputs where the Claim uses their meaning.

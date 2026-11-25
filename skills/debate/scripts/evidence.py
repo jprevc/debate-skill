@@ -18,7 +18,8 @@ Subcommands (run with -h for options):
   quote  <folder> <file> <A-B> --id ... write an Evidence file whose Quote/Context are copied from the cached file
                                         (with EVIDENCE_ARCHIVE=1, a web page is snapshot by Save Page Now: archive_url)
   archive <folder>                      snapshot the quoted web pages that have no archive_url yet (EVIDENCE_ARCHIVE=1)
-  calc   <folder> "<formula>" --id ...  write an Evidence file that computes a number from numbers in other Evidence,
+  calc   <folder> "<formula>" --id ...  write an Evidence file that computes a number from numbers in other Evidence
+                                        (--at ID:VALUE=WORDS picks the passage of a number that stands in several),
                                         e.g. "E-CON-001:1195 / E-PRO-004:63900 * 100"; verify recomputes it
   verify <folder> [ID ...] [--live]     check each Evidence quote against its cached source and/or the live URL,
                                         and recompute each calc
@@ -1005,7 +1006,8 @@ def cmd_archive(a):
 
 # ---------- calc: arithmetic over Evidence ----------
 
-CALC_OPERAND = re.compile(r"\b(E-(?:PRIMARY|USER|PRO|CON)(?:-[A-Z])?-\d{3}):(\d+(?:\.\d+)?)\b")
+OPERAND = r"(E-(?:PRIMARY|USER|PRO|CON)(?:-[A-Z])?-\d{3}):(\d+(?:\.\d+)?)"
+CALC_OPERAND = re.compile(rf"\b{OPERAND}\b")
 CALC_OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
             ast.Pow: operator.pow}
 
@@ -1062,11 +1064,28 @@ def _calc_fmt(d):
     return s.rstrip("0").rstrip(".") if "." in s else s
 
 
-def _calc_inputs(folder, operands):
-    """For each operand, where its value stands in that Evidence's Quote or Context, or a problem."""
+AT_WINDOW = 200  # how near an --at phrase must stand to its number, in characters either side
+
+
+def _calc_at(specs):
+    """--at "E-ID:value=phrase" options (or the at: line of a calc) → {(id, value): [phrase, …]}. An input used
+    twice for two passages with the same number gets one phrase for each."""
+    out = {}
+    for spec in specs:
+        m = re.fullmatch(rf"\s*{OPERAND}\s*=\s*(.+?)\s*", spec)
+        if not m or "|" in m[3]:
+            raise ValueError(f"--at {spec!r}: write it as <Evidence ID>:<number>=<words next to the number>, without '|'")
+        out.setdefault((m[1], m[2]), []).append(m[3])
+    return out
+
+
+def _calc_inputs(folder, operands, at=None, strict=False):
+    """For each distinct operand, the passage of that Evidence's Quote or Context where its value stands, or a
+    problem. at maps (id, value) to words that stand next to the number, to pick its passage. With strict (when
+    a calc is written), a value that stands in more than one passage needs those words."""
     import numcheck
-    found, problems = [], []
-    for eid, val in operands:
+    at, found, problems = at or {}, [], []
+    for eid, val in dict.fromkeys(operands):
         p = folder / "evidence" / f"{eid}.md"
         if not p.exists():
             problems.append(f"{eid} does not exist")
@@ -1074,19 +1093,46 @@ def _calc_inputs(folder, operands):
         text = p.read_text(encoding="utf-8")
         if re.search(r"^- Result:\s*failed", text, re.M | re.I):
             problems.append(f"{eid} failed the Audit")
-        v, hit = decimal.Decimal(val), None
-        for name in ("Quote", "Context"):
-            body = numcheck.section(text, name)
-            for n in numcheck.numbers(body, quantities_only=False):
-                if any(abs(pv) == v or abs(pv) * n.scale == v for pv, _ in n.values):
-                    hit = f"{name}: …{body[max(0, n.start - 70):n.start + len(n.text) + 50].strip()}…"
-                    break
-            if hit:
-                break
-        if hit:
-            found.append((eid, val, hit))
-        else:
+        v = decimal.Decimal(val)
+
+        def passages(phrase=None):
+            """The passages where the value stands, nearest to the phrase first (only those within AT_WINDOW)."""
+            hits = []
+            words = re.compile(r"\s+".join(map(re.escape, phrase.split())), re.I) if phrase else None
+            for name in ("Quote", "Context"):
+                body = numcheck.section(text, name)
+                spots = [(m.start(), m.end()) for m in words.finditer(body)] if words else []
+                for n in numcheck.numbers(body, quantities_only=False):
+                    if not any(abs(pv) == v or abs(pv) * n.scale == v for pv, _ in n.values):
+                        continue
+                    # 0 when the phrase contains the number, else how far the number stands from the phrase
+                    dist = min((0 if a <= n.start < b else min(abs(a - n.start), abs(b - n.start)) for a, b in spots),
+                               default=None) if words else 0
+                    if dist is None or dist > AT_WINDOW + len(phrase or ""):
+                        continue
+                    hits.append((dist, f"{name}: …{body[max(0, n.start - 70):n.start + len(n.text) + 50].strip()}…"))
+            return [h for _, h in sorted(hits, key=lambda h: h[0])]
+        phrases = at.get((eid, val))
+        if phrases:
+            for phrase in phrases:
+                hits = passages(phrase)
+                if hits:
+                    found.append((eid, val, hits[0]))
+                else:
+                    problems.append(f"{val} is not in the Quote or Context of {eid} near {phrase!r}")
+            continue
+        hits = passages()
+        if not hits:
             problems.append(f"{val} is not in the Quote or Context of {eid}")
+        elif strict and len(hits) > 1:
+            shown = "; ".join(hits[:3])
+            problems.append(f"{val} stands in {len(hits)} places in {eid} ({shown}{'; …' if len(hits) > 3 else ''}): "
+                            f"pick its passage with --at \"{eid}:{val}=<words next to it>\"")
+        else:
+            found.append((eid, val, hits[0]))
+    unused = [f"{e}:{v}" for e, v in at if (e, v) not in operands]
+    if unused:
+        problems.append(f"--at names {', '.join(unused)}, which the formula does not use")
     return found, problems
 
 
@@ -1099,7 +1145,11 @@ def cmd_calc(a):
         result, operands, constants, shown = _calc_result(a.formula)
     except ValueError as e:
         sys.exit(f"FAILED: {e}")
-    found, problems = _calc_inputs(folder, operands)
+    try:
+        at = _calc_at(a.at)
+    except ValueError as e:
+        sys.exit(f"FAILED: {e}")
+    found, problems = _calc_inputs(folder, operands, at, strict=True)
     if problems:
         sys.exit("FAILED: " + "; ".join(problems) + ". Copy each input from its Evidence as a plain decimal "
                  "(36,83 % → 36.83; 1.195 mio → 1195), or quote the Evidence that states it first.")
@@ -1110,7 +1160,9 @@ def cmd_calc(a):
         "---", f"id: {a.id}", f"added_by: {a.added_by}", f"stage: {a.stage}", "kind: calc",
         f"url: evidence/{a.id}.md", f"accessed: {today}", f"title: {a.title}", f"author: {a.added_by}",
         "publisher: evidence.py calc", f"published: {today}", "language: n/a",
-        f"formula: {a.formula}", f"inputs: {', '.join(inputs)}", f"result: {res}", "---", "",
+        f"formula: {a.formula}", f"inputs: {', '.join(inputs)}",
+        *([f"at: {' | '.join(f'{e}:{v}={w}' for (e, v), ws in at.items() for w in ws)}"] if at else []),
+        f"result: {res}", "---", "",
         "## Quote", "", f"> {shown} = {res}", "", "## Inputs", "",
         f"Method: {a.method}", "",
         *[f"- {val} from {eid} ({hit})" for eid, val, hit in found],
@@ -1128,7 +1180,11 @@ def _calc_verify(folder, fm):
         result, operands, _, _ = _calc_result(fm.get("formula", ""))
     except ValueError as e:
         return f"formula: {e}"
-    _, problems = _calc_inputs(folder, operands)
+    try:
+        at = _calc_at(fm["at"].split(" | ") if fm.get("at") else [])
+    except ValueError as e:
+        return f"at: {e}"
+    _, problems = _calc_inputs(folder, operands, at)
     if problems:
         return "input: " + "; ".join(problems)
     res = _calc_fmt(result)
@@ -1344,6 +1400,9 @@ def main():
     p.add_argument("--stage", required=True)
     p.add_argument("--title", required=True, help="what the result is, e.g. 'Gross wage at which the cap starts, EUR a month'")
     p.add_argument("--method", required=True, help="one or two sentences: what each input is, and why the formula combines them so")
+    p.add_argument("--at", action="append", default=[], metavar="ID:VALUE=WORDS",
+                   help="words that stand next to an input's number in its Evidence, to pick the passage when the "
+                        "number stands in more than one place (repeatable)")
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_calc)
 

@@ -102,6 +102,26 @@ class Calc(unittest.TestCase):
         self.assertNotIn("UNCITED", out)
         self.assertIn("| E-PRO-006 |", (self.folder / "ledger.md").read_text(encoding="utf-8").replace("[E-PRO-006](evidence/E-PRO-006.md)", "E-PRO-006"))
 
+    def test_a_number_in_several_passages_needs_words_that_pick_one(self):
+        (self.folder / "evidence" / "E-CON-002.md").write_text(evidence(
+            "E-CON-002", "Za kapico 3 milijone € manj. Za mikro osnovo 4,5 milijona €. Za dvojno plačilo 3 milijone € manj."),
+            encoding="utf-8")
+        r = self.calc("E-CON-002:3 + E-CON-002:3")
+        self.assertIn("3 stands in 2 places in E-CON-002", r.stderr)
+        self.assertIn('--at "E-CON-002:3=<words next to it>"', r.stderr)
+        r = self.run_ev("calc", str(self.folder), "E-CON-002:3 + E-CON-002:3", "--id", "E-PRO-006", "--added-by", "PRO",
+                        "--stage", "rebuttal", "--title", "T", "--method", "M",
+                        "--at", "E-CON-002:3=Za kapico 3", "--at", "E-CON-002:3=Za dvojno plačilo 3")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        text = (self.folder / "evidence" / "E-PRO-006.md").read_text(encoding="utf-8")
+        self.assertIn("at: E-CON-002:3=Za kapico 3 | E-CON-002:3=Za dvojno plačilo 3", text)
+        self.assertIn("- 3 from E-CON-002 (Quote: …Za kapico 3 milijone", text)
+        self.assertRegex(text, r"- 3 from E-CON-002 \(Quote: ….*Za dvojno plačilo 3 milijone € manj\.…\)")
+        self.assertIn("| E-PRO-006 | recomputed |", self.run_ev("verify", str(self.folder), "E-PRO-006").stdout)
+        r = self.run_ev("calc", str(self.folder), "E-CON-002:3 * 2", "--id", "E-PRO-007", "--added-by", "PRO", "--stage", "rebuttal",
+                        "--title", "T", "--method", "M", "--at", "E-CON-002:3=nowhere near")
+        self.assertIn("3 is not in the Quote or Context of E-CON-002 near 'nowhere near'", r.stderr)
+
     def test_inputs_must_stand_in_their_evidence(self):
         self.assertIn("36.8 is not in the Quote or Context of E-PRO-004", self.calc("E-PRO-004:36.8 * 2").stderr)
         self.assertIn("E-PRO-009 does not exist", self.calc("E-PRO-009:1 + 1").stderr)
