@@ -1199,7 +1199,7 @@ def case_items(text):
 
 def cmd_numbers(a):
     """NUMBER lines for the Claims and responses of case files: numbers in a body that none of the Evidence in its
-    header, or cited in its body, states. Advisory: the Advocate fixes them before the Turn ends."""
+    header, or cited in its body, states. Advisory: the Advocate fixes them before it replies."""
     import numcheck
     folder = work_dir(a.folder)
     evdir = folder / "evidence"

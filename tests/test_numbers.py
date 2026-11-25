@@ -133,7 +133,7 @@ class Calc(unittest.TestCase):
 
 
 class Numbers(unittest.TestCase):
-    """evidence.py numbers: the NUMBER check of an Advocate's own Claims and responses, run before a Turn ends."""
+    """evidence.py numbers: the NUMBER check of an Advocate's own Claims and responses, run before it replies at the end of its Stage."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
