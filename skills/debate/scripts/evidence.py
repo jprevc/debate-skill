@@ -23,6 +23,9 @@ Subcommands (run with -h for options):
                                         e.g. "E-CON-001:1195 / E-PRO-004:63900 * 100"; verify recomputes it
   numbers <folder> <case file> [...]    NUMBER lines: numbers in a Claim or response that none of the Evidence in its
                                         header or body states (advisory; fix with calc, a citation or the number)
+  lawdiff <folder> <bill> <law>         line up a Slovenian bill's amending articles with the consolidated law (PIS):
+                                        each article in force and as amended -> evidence/files/lawdiff/<law>-<bill>.txt
+                                        (an article it can't apply is marked unparsed and shown as both full texts)
   verify <folder> [ID ...] [--live]     check each Evidence quote against its cached source and/or the live URL,
                                         and recompute each calc
                                         (live: exact | partial | missing | unreachable, or unchanged when the
@@ -1366,6 +1369,75 @@ def cmd_verify(a):
         print(f"| {f.stem} | {cached} | {live} | {'; '.join(note)} |")
 
 
+def cmd_lawdiff(a):
+    """Cache a bill's amending articles on one act, each lined up with the consolidated law's article before and
+    after the change, in evidence/files/lawdiff/<law>-<bill>.txt (with a .json beside it, so quote and verify read
+    it like any cached file). An amending article lawdiff.py can't apply is shown as both full texts."""
+    import lawdiff
+    folder = Path(a.folder)
+    bill_path, bill_lines = load_lines(a.bill)
+    law_path, law_lines = load_lines(a.law)
+
+    def meta(p):
+        p = p.with_suffix(".json")
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+
+    def rel(p):
+        return os.path.relpath(p.resolve(), folder.resolve())
+
+    bmeta, lmeta = meta(bill_path), meta(law_path)
+    law_abbr = lawdiff.abbreviation(lmeta.get("title", ""), law_lines) or law_path.stem
+    bill_abbr = lawdiff.abbreviation(bmeta.get("title", ""), bill_lines) or bill_path.stem
+    law = lawdiff.law_articles(law_lines)
+    name = lawdiff.act_name(lmeta.get("title", "")) or lawdiff.act_name(
+        next((ln for ln in law_lines if lawdiff.act_name(ln)), ""))
+    section = lawdiff.act_section(lawdiff.bill_articles(bill_lines), name, a.articles)
+    if not section:
+        sys.exit(f"no article of the bill cites the act '{name}' as 'V Zakonu {name} (Uradni list …)': "
+                 "name the amending articles with --articles")
+    law_url, bill_url = lmeta.get("url", str(law_path)), bmeta.get("url", str(bill_path))
+    out_lines = [f"{law_abbr} as amended by {bill_abbr}, article by article. The text in force is the consolidated "
+                 f"text ({law_url}); the amended text is worked out by evidence.py lawdiff from the bill ({bill_url}), "
+                 "so quote it together with the amending article from the bill."]
+    report, parsed = [], 0
+    for num, body in section:
+        by = f"{num} člen {bill_abbr}"
+        try:
+            changes = lawdiff.apply_amendment(body, law)
+        except lawdiff.Unparsed as e:
+            target = lawdiff.amended_article(body)
+            out_lines += [f"== {target} člen {law_abbr}, amended by {by}: unparsed ({e})",
+                          f"current article: {target} člen {law_abbr} in force",
+                          lawdiff.render_article(target, law[target]["title"], law[target]["paras"]) if target in law
+                          else "(not in the consolidated text)",
+                          f"amending article: {by}", f"{num} člen {lawdiff.one_line(body)}"]
+            report.append(f"{target} člen: unparsed (by {num} člen): {e}")
+            continue
+        parsed += 1
+        for target, (before, after) in changes.items():
+            how = "added" if before is None else "amended"
+            out_lines += [f"== {target} člen {law_abbr}, {how} by {by}: parsed",
+                          f"before: {target} člen {law_abbr} in force",
+                          lawdiff.render_article(target, *before) if before else "(none: a new article)",
+                          f"after: {target} člen {law_abbr} as amended by {by}, worked out by lawdiff",
+                          lawdiff.render_article(target, *after) if after else "(deleted)"]
+            report.append(f"{target} člen: parsed (by {num} člen)")
+    dest = folder / "evidence" / "files" / "lawdiff"
+    dest.mkdir(parents=True, exist_ok=True)
+    txt = dest / (re.sub(r"[^A-Za-z0-9čšžČŠŽ.-]+", "-", f"{law_abbr}-{bill_abbr}") + ".txt")
+    txt.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+    info = {"url": law_url, "bill_url": bill_url, "law_file": rel(law_path), "bill_file": rel(bill_path),
+            "fetched": lmeta.get("fetched") or datetime.date.today().isoformat(), "kind": "lawdiff",
+            "title": f"{law_abbr} as amended by {bill_abbr}", "paragraphs": len(out_lines),
+            "amending_articles": len(section), "parsed": parsed}
+    txt.with_suffix(".json").write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"cached: {txt.relative_to(folder)}  [{parsed} of {len(section)} amending articles parsed]")
+    for r in report:
+        print(r)
+    if parsed < len(section):
+        print("An unparsed article is shown as both full texts: the article in force and the amending article.")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1464,6 +1536,12 @@ def main():
     p.add_argument("folder")
     p.add_argument("files", nargs="+", metavar="case_file")
     p.set_defaults(fn=cmd_numbers)
+    p = sub.add_parser("lawdiff", help="line up a bill's amending articles with the consolidated law, before and after")
+    p.add_argument("folder")
+    p.add_argument("bill", help="cached text of the bill (or amending act)")
+    p.add_argument("law", help="cached text of the consolidated law it amends (PIS, reference/sites.md)")
+    p.add_argument("--articles", help="the bill's amending articles to use, e.g. 15,16,17 (default: the act's section)")
+    p.set_defaults(fn=cmd_lawdiff)
 
     p = sub.add_parser("archive", help="snapshot quoted web pages in the Wayback Machine (needs EVIDENCE_ARCHIVE=1)")
     p.add_argument("folder")
