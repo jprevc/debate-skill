@@ -22,8 +22,8 @@ Read these:
 
 ## For each piece of Evidence
 
-First run `python3 <skill dir>/scripts/evidence.py verify <folder> <your IDs…> --live` once for the whole batch. For each piece of Evidence it reports whether the quote is in the cached copy the Advocate quoted from, and in the live source now: `exact`, `partial`, `missing` or `unreachable`.
-- `exact` on the live source settles **Quote found** as `yes`. Go straight to step 2, using `evidence.py show` on the cached file (`source_file`, `source_lines` ± a few paragraphs) for the context.
+First run `python3 <skill dir>/scripts/evidence.py verify <folder> <your IDs…> --live` once for the whole batch. For each piece of Evidence it reports whether the quote is in the cached copy the Advocate quoted from, and in the live source now: `exact`, `partial`, `missing` or `unreachable`, or `unchanged` when the live download is byte for byte the copy the Advocate quoted.
+- `exact` on the live source, or `unchanged` with `exact` on the cached copy, settles **Quote found** as `yes`. Go straight to step 2, using `evidence.py show` on the cached file (`source_file`, `source_lines` ± a few paragraphs) for the context.
 - For anything else, do step 1 by hand. A `missing` quote is often a reformatted table or a paraphrase, so check which it is.
 
 1. **Reopen the source.** Use `evidence.py fetch` with distinctive words from the quote, or `search` on the file in `evidence/files/`. Add `--render` when the `source_file` ends in `-rendered.txt`, or when a plain fetch returns almost no text. Look for the verbatim quote.

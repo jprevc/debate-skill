@@ -16,6 +16,8 @@ Subcommands (run with -h for options):
   show   <file> <A-B>                   print paragraphs A..B (max 40) of a cached text file
   quote  <folder> <file> <A-B> --id ... write an Evidence file whose Quote/Context are copied from the cached file
   verify <folder> [ID ...] [--live]     check each Evidence quote against its cached source and/or the live URL
+                                        (live: exact | partial | missing | unreachable, or unchanged when the
+                                        download is byte-identical to the cached one)
 
 Cached text files have one paragraph per line, so "line" = "paragraph" everywhere.
 <folder> is the debate's agent/ folder; a project folder that contains agent/ is accepted too.
@@ -861,21 +863,24 @@ def _front(text):
 
 
 def _live_paras(folder, url, pq, pscript, rendered):
-    """The live source's paragraphs and notes on how they were got, or (the exception, [])."""
+    """(paragraphs, notes, sha256 of the downloaded bytes) for the live source, or (the exception, [], None).
+
+    The hash is given only for a plain download, the one case where the cache stores the same bytes."""
     try:
         with tempfile.TemporaryDirectory() as td:
             if pscript:
-                return _data_rows(_run_data_script(folder / pscript)[0]["rows"]), ["re-ran script"]
+                return _data_rows(_run_data_script(folder / pscript)[0]["rows"]), ["re-ran script"], None
             if pq:
                 raw, ctype = _px_json(url, pq)
-                return _px_rows(raw, ctype), ["re-queried"]
+                return _px_rows(raw, ctype), ["re-queried"], None
             if rendered:
                 raw, ctype, _ = _render(url)
-                return to_paragraphs(raw, ctype, td)[0], ["re-rendered"]
+                return to_paragraphs(raw, ctype, td)[0], ["re-rendered"], None
             raw, ctype, insecure = _get(url)
-            return to_paragraphs(raw, ctype, td)[0], ["TLS unverified"] if insecure else []
+            return (to_paragraphs(raw, ctype, td)[0], ["TLS unverified"] if insecure else [],
+                    hashlib.sha256(raw).hexdigest())
     except Exception as e:  # noqa: BLE001
-        return e, []
+        return e, [], None
 
 
 def cmd_verify(a):
@@ -912,10 +917,14 @@ def cmd_verify(a):
             key = (url, pscript, json.dumps(pq, sort_keys=True), rendered)
             if key not in sources:  # many Evidence quote one source: download it once per run
                 sources[key] = _live_paras(folder, url, pq, pscript, rendered)
-            paras, how = sources[key]
+            paras, how, sha = sources[key]
             if isinstance(paras, Exception):
                 live = "unreachable"
                 note.append(f"{type(paras).__name__}: {str(paras)[:60]}")
+            elif sha and sha == pinfo.get("sha256"):
+                # the same bytes the quote was cut from: a text match would only test the extraction again
+                live = "unchanged"
+                note += how
             else:
                 live = match_quality(quote, norm(" ".join(paras)))
                 note += how
