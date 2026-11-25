@@ -44,8 +44,9 @@ The other Side's notes are its private work. Your case stands on the public reco
    - Record each piece of Evidence with `quote` the moment you find it. The next free ID is the highest `evidence/<your prefix>-NNN.md` plus one.
    - Work in parallel: put independent searches and fetches in the same turn, for example four WebSearch calls at once, then four `fetch` calls on the best hits.
 3. **Write** your output file from `templates/case.md`. Use Claim and response formats from `reference/evidence.md`. Write the content in the Report language, but keep the template's `##` headings and the format labels (`Dimension:`, `Type:`, `Evidence:`, `Rebut`, `Priority:` …) exactly as written in English, and spell each Dimension name exactly as in `motion.md`. `scripts/ledger.py` reads them.
-4. **Update your notes file**: leads followed, dead ends with the reason each failed, the weak points you see in your own case, and attacks planned for later Stages. The next Stage is run by a fresh Advocate whose only memory is this file. Write the notes for that reader.
-5. **Reply** to the orchestrator with three things: the case file path, the number of new Evidence files, and your Evidence Requests (IDs and priorities). If `papers` printed a `WARNING` line, add it too, word for word.
+4. **Check your numbers.** Run `scripts/evidence.py numbers <folder> <output file>`. Each `NUMBER` line is a number in a Claim or response that none of its Evidence states (the Evidence in its header, plus the IDs in its text). Fix each one: work it out with `calc` and cite the calc, cite the Evidence that does state it, or correct the number. Exact means exact: write "EUR 25,796" for 25,795.6, not "EUR 25,800". Rerun until only lines the check misreads are left (a count of your own items, a number that names something rather than measures it).
+5. **Update your notes file**: leads followed, dead ends with the reason each failed, the weak points you see in your own case, and attacks planned for later Stages. The next Stage is run by a fresh Advocate whose only memory is this file. Write the notes for that reader.
+6. **Reply** to the orchestrator with four things: the case file path, the number of new Evidence files, your Evidence Requests (IDs and priorities), and the `NUMBER` lines you left, each with its reason, followed by the last line of `numbers` (the count). If `papers` printed a `WARNING` line, add it too, word for word.
 
 ## Stage specifics
 
@@ -77,5 +78,6 @@ The other Side's notes are its private work. Your case stands on the public reco
 - Every Claim has a Dimension, a type, and Evidence that matches its type.
 - Every Evidence ID you cite exists as a file.
 - Every piece of Evidence you created is cited.
+- `evidence.py numbers` on your output file prints no `NUMBER` line except those you list in your reply.
 - In Rebuttal and Rejoinder, every opposing item has exactly one response.
 - Every critical gap you could not fill yourself is an Evidence Request rather than a silent hole.
