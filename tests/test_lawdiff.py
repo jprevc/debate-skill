@@ -227,5 +227,22 @@ class Lawdiff(unittest.TestCase):
         self.assertIn("2. člen: unparsed (by 2. člen): the bill makes the old 4th paragraph the 5th, lawdiff the 3rd", out)
 
 
+    def test_renumbering_in_one_article_does_not_touch_another_article_the_same_amendment_edits(self):
+        self.write_bill(bill(f"{CITE} v 2. členu tretji odstavek črta.\nDosedanji četrti odstavek postane tretji odstavek.\n"
+                             "V 3. členu se v drugem odstavku beseda »polovico« nadomesti z besedo »tretjino«."))
+        out, lines = self.lawdiff()
+        self.assertIn("1 of 1 amending articles parsed", out)
+        self.assertEqual(self.version(lines, "3. člen", "after:"),
+                         "3. člen (delna pokojnina) (1) Delno pokojnino lahko dobi, kdor dela ali starostne ure ali "
+                         "starostne dni. (2) Delna pokojnina znaša tretjino.")
+
+    def test_an_unparsed_article_is_shown_against_the_article_it_amends_not_one_it_mentions(self):
+        self.write_bill(BILL.replace("2. ZAKON O DAVKIH",
+                                     "4.a člen\nSkladno z 2. členom se v 4. členu stavek prestavi na konec. 2. ZAKON O DAVKIH"))
+        out, lines = self.lawdiff()
+        self.assertIn("4. člen: unparsed (by 4.a člen)", out)
+        self.assertTrue(any(ln.startswith("== 4. člen ZPok-2, amended by 4.a člen ZUK: unparsed") for ln in lines), lines)
+
+
 if __name__ == "__main__":
     unittest.main()
