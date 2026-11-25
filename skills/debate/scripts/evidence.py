@@ -50,6 +50,7 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+import zlib
 from pathlib import Path
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -60,11 +61,26 @@ SHOW_MAX_CHARS = 14_000
 
 # ---------- download & convert ----------
 
+def _body(r):
+    """The response body, decompressed: some servers (the Wayback Machine's id_ replies among them) send gzip
+    or deflate although the request asks for no encoding. Brotli would need a library and is left as it is."""
+    raw = r.read(MAX_BYTES)
+    enc = (r.headers.get("Content-Encoding") or "").strip().lower()
+    if enc in ("gzip", "x-gzip"):
+        return zlib.decompress(raw, 16 + zlib.MAX_WBITS)
+    if enc == "deflate":
+        try:
+            return zlib.decompress(raw)
+        except zlib.error:  # raw deflate, without the zlib header
+            return zlib.decompress(raw, -zlib.MAX_WBITS)
+    return raw
+
+
 def _get(url):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
     try:
         with urllib.request.urlopen(req, timeout=40) as r:
-            return r.read(MAX_BYTES), r.headers.get("Content-Type", ""), False
+            return _body(r), r.headers.get("Content-Type", ""), False
     except urllib.error.URLError as e:
         if "CERTIFICATE" not in str(e).upper():
             raise
@@ -72,7 +88,7 @@ def _get(url):
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     with urllib.request.urlopen(req, timeout=40, context=ctx) as r:
-        return r.read(MAX_BYTES), r.headers.get("Content-Type", ""), True
+        return _body(r), r.headers.get("Content-Type", ""), True
 
 
 class _Text(html.parser.HTMLParser):

@@ -218,6 +218,40 @@ class SnapshotOnQuote(Debate):
         self.assertIn("> The total static effect", text)
 
 
+class CompressedReply(Debate):
+    """The Wayback Machine's id_ replies come gzip-encoded even unasked; some sites compress too."""
+
+    def urlopen(self, encoding):
+        import gzip
+        import zlib
+        bodies = {
+            "https://archive.org/wayback/available?": (json.dumps({"archived_snapshots": {"closest": {
+                "available": True, "status": "200", "url": SNAPSHOT, "timestamp": "20260501083000"}}}).encode(), None),
+            "https://web.archive.org/web/20260501083000id_/": (PAGE, encoding),
+        }
+        encode = {"gzip": gzip.compress, "deflate": zlib.compress, None: lambda b: b}
+
+        class Reply(io.BytesIO):
+            def __init__(self, body, enc):
+                super().__init__(encode[enc](body))
+                self.headers = {"Content-Type": "text/html; charset=utf-8", **({"Content-Encoding": enc} if enc else {})}
+
+            def __enter__(self):
+                return self
+
+        def fake(req, **_):
+            url = req.full_url
+            body, enc = next(v for k, v in bodies.items() if url.startswith(k))
+            return Reply(body, enc)
+        return mock.patch.object(evidence.urllib.request, "urlopen", side_effect=fake)
+
+    def test_a_gzip_or_deflate_snapshot_is_cached_as_readable_text(self):
+        for enc in ("gzip", "deflate"):
+            with self.subTest(enc), self.urlopen(enc):
+                txt, _ = evidence.fetch_to_cache(self.folder, URL, refresh=True, archive=True)
+                self.assertIn(QUOTE, txt.read_text(encoding="utf-8"))
+
+
 def test_the_html_report_links_the_snapshot_beside_the_source(tmp_path):
     from test_confrontation import Debate as FinishedDebate
     debate = FinishedDebate(tmp_path)
