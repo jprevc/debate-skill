@@ -30,19 +30,22 @@ SNAPSHOT = f"http://web.archive.org/web/20260501083000/{URL}"
 class FakeWeb:
     """The live site (up or down) and the Wayback Machine, behind evidence._get and evidence._save_page_now."""
 
-    def __init__(self, site_up=True, archived=PAGE, saves=True):
+    def __init__(self, site_up=True, archived=PAGE, saves=True, gone=False, capture_status="200"):
         self.site_up, self.archived, self.saves, self.calls = site_up, archived, saves, []
+        self.gone, self.capture_status = gone, capture_status
 
     def get(self, url):
         self.calls.append(url)
         if url == URL:
+            if self.gone:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
             if not self.site_up:
                 raise urllib.error.URLError("[Errno -2] Name or service not known")
             return PAGE, "text/html", False
         if url.startswith("https://archive.org/wayback/available?"):
             asked = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["url"][0]
-            closest = {"available": True, "status": "200", "url": SNAPSHOT, "timestamp": "20260501083000"} \
-                if self.archived and asked == URL else None
+            closest = {"available": True, "status": self.capture_status, "url": SNAPSHOT,
+                       "timestamp": "20260501083000"} if self.archived and asked == URL else None
             return json.dumps({"url": asked, "archived_snapshots": {"closest": closest} if closest else {}}).encode(), \
                 "application/json", False
         if re.fullmatch(rf"https://web\.archive\.org/web/\d{{14}}id_/{re.escape(URL)}", url) and self.archived:
@@ -67,6 +70,9 @@ class Debate(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.folder = Path(self.tmp.name) / "agent"
         (self.folder / "evidence").mkdir(parents=True)
+        env = mock.patch.dict(os.environ, {"EVIDENCE_ARCHIVE": ""})  # off, whatever the developer's shell sets
+        env.start()
+        self.addCleanup(env.stop)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -113,6 +119,26 @@ class VerifyFallsBackToTheArchive(Debate):
     def test_no_snapshot_leaves_it_unreachable(self):
         self.assertIn("| E-PRO-001 | exact | unreachable |", self.verify(FakeWeb(site_up=False, archived=None)))
 
+    def test_a_page_the_site_removed_is_not_vouched_for_by_an_old_snapshot(self):
+        out = self.verify(FakeWeb(gone=True))
+        self.assertIn("| E-PRO-001 | exact | unreachable |", out)
+        self.assertIn("HTTP Error 404", out)
+
+    def test_a_capture_of_an_error_page_is_no_snapshot(self):
+        self.assertIn("| E-PRO-001 | exact | unreachable |", self.verify(FakeWeb(site_up=False, capture_status="404")))
+
+    def test_a_rendered_page_is_not_checked_against_the_unrendered_snapshot(self):
+        txt = self.cached_file()
+        rendered = txt.with_name(txt.stem + "-rendered.txt")
+        txt.rename(rendered)
+        txt.with_suffix(".json").rename(rendered.with_suffix(".json"))
+        p = self.folder / "evidence" / "E-PRO-001.md"
+        p.write_text(p.read_text(encoding="utf-8").replace(txt.name, rendered.name), encoding="utf-8")
+        web = FakeWeb(site_up=False)
+        with mock.patch.object(evidence, "_render", side_effect=RuntimeError("render failed: net::ERR_NAME_NOT_RESOLVED")):
+            self.assertIn("| E-PRO-001 | exact | unreachable |", self.verify(web))
+        self.assertFalse([c for c in web.calls if "archive.org" in c])
+
     def test_a_site_that_is_up_is_not_looked_up_in_the_archive(self):
         web = FakeWeb()
         self.assertIn("| E-PRO-001 | exact | unchanged |", self.verify(web))
@@ -132,6 +158,7 @@ class FetchArchive(Debate):
         text = self.quote(FakeWeb(), self.cached_file())
         self.assertIn(f"url: {URL}\n", text)
         self.assertIn(f"archive_url: {SNAPSHOT}\n", text)
+        self.assertIn("accessed: 2026-05-01\n", text)  # the date of the text quoted
         # the site is back, serving the bytes the snapshot kept
         self.assertIn("| E-PRO-001 | exact | unchanged |", self.verify(FakeWeb()))
 

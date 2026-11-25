@@ -23,8 +23,9 @@ Subcommands (run with -h for options):
   verify <folder> [ID ...] [--live]     check each Evidence quote against its cached source and/or the live URL,
                                         and recompute each calc
                                         (live: exact | partial | missing | unreachable, or unchanged when the
-                                        download is byte-identical to the cached one; when a web page is down,
-                                        archived <date>: exact | partial | missing against its snapshot)
+                                        download is byte-identical to the cached one; when a site is down (not
+                                        404/410, not --render), archived <date>: exact | partial | missing
+                                        against its Wayback Machine snapshot)
 
 Cached text files have one paragraph per line, so "line" = "paragraph" everywhere.
 <folder> is the debate's agent/ folder; a project folder that contains agent/ is accepted too.
@@ -243,7 +244,8 @@ def _latest_snapshot(url):
     """The URL of the latest Wayback Machine snapshot of url, or None."""
     raw, _, _ = _get(WAYBACK_API + urllib.parse.quote(url, safe=""))
     closest = (json.loads(raw).get("archived_snapshots") or {}).get("closest") or {}
-    return closest.get("url") if closest.get("available") and SNAPSHOT_RE.match(closest.get("url", "")) else None
+    ok = closest.get("available") and str(closest.get("status")) == "200"  # not a capture of an error or redirect
+    return closest.get("url") if ok and SNAPSHOT_RE.match(closest.get("url", "")) else None
 
 
 def _get_snapshot(snapshot_url):
@@ -276,15 +278,21 @@ def _known_snapshot(meta):
 
 def _save_snapshot(meta_file, meta):
     """Save Page Now for a fetched web page, recorded in its cache metadata so each page is sent once."""
-    meta["snapshot_url"] = _save_page_now(meta["url"])
-    meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
-    return meta["snapshot_url"]
+    fresh = json.loads(meta_file.read_text(encoding="utf-8"))  # another Advocate may have saved it meanwhile
+    if not _known_snapshot(fresh):
+        fresh["snapshot_url"] = _save_page_now(fresh["url"])
+        tmp = meta_file.with_name(f".{meta_file.name}.{os.getpid()}")
+        tmp.write_text(json.dumps(fresh, ensure_ascii=False, indent=1), encoding="utf-8")
+        os.replace(tmp, meta_file)  # atomic: a parallel quote never reads half a file
+    meta.update(fresh)
+    return _known_snapshot(fresh)
 
 
-def _is_web_page(meta_file, meta):
-    """A page `fetch` cached (not a pxweb query, a data script or a user's file, and never in sources/)."""
+def _is_web_page(folder, meta_file, meta):
+    """A page `fetch` cached in evidence/files/web/ (not a pxweb query, a data script or a user's file)."""
     return (str(meta.get("url", "")).startswith("http") and meta.get("kind") in ("html", "pdf", "text")
-            and not meta.get("user_supplied") and "sources" not in Path(meta_file).resolve().parts)
+            and not meta.get("user_supplied") and not meta.get("post_query")
+            and Path(meta_file).resolve().is_relative_to((Path(folder) / "evidence" / "files" / "web").resolve()))
 
 
 def load_lines(path):
@@ -873,9 +881,9 @@ def cmd_quote(a):
     meta = json.loads(meta_file.read_text(encoding="utf-8")) if meta_file.exists() else {}
     rel = str(path.relative_to(folder)) if path.is_relative_to(folder) else str(path)
     url = a.url or meta.get("url") or rel
-    accessed = meta.get("fetched") or datetime.date.today().isoformat()
+    accessed = meta.get("archived") or meta.get("fetched") or datetime.date.today().isoformat()
     snapshot, queued = (_known_snapshot(meta) if url == meta.get("url") else None), None
-    if not snapshot and url == meta.get("url") and _archiving() and _is_web_page(meta_file, meta):
+    if not snapshot and url == meta.get("url") and _archiving() and _is_web_page(folder, meta_file, meta):
         try:
             snapshot = _save_snapshot(meta_file, meta)
         except Exception as err:  # noqa: BLE001 - Save Page Now is rate-limited; the quote stands without it
@@ -951,7 +959,7 @@ def cmd_archive(a):
         meta_file = (folder / fm["source_file"]).with_suffix(".json")
         if meta_file.exists():
             meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            if _is_web_page(meta_file, meta) and fm.get("url") == meta["url"]:
+            if _is_web_page(folder, meta_file, meta) and fm.get("url") == meta["url"]:
                 waiting.setdefault(meta_file, []).append(f)
     saved = failed = 0
     for n, (meta_file, evs) in enumerate(waiting.items()):
@@ -1149,6 +1157,12 @@ def _live_paras(folder, url, pq, pscript, rendered):
         return e, [], None
 
 
+def _site_down(err):
+    """The site failed to answer (connection, DNS, timeout, TLS, server error, blocked), as opposed to a page it
+    says is gone (404, 410): an old snapshot must not vouch for a page its publisher removed."""
+    return not (isinstance(err, urllib.error.HTTPError) and err.code in (404, 410))
+
+
 def _archived_paras(url, snapshot_url):
     """(paragraphs, snapshot URL) of the given snapshot, or else of the latest one, or (the exception, None)."""
     try:
@@ -1200,7 +1214,8 @@ def cmd_verify(a):
             if key not in sources:  # many Evidence quote one source: download it once per run
                 sources[key] = _live_paras(folder, url, pq, pscript, rendered)
             paras, how, sha = sources[key]
-            if isinstance(paras, Exception) and not (pq or pscript):  # a web page: try the Wayback Machine
+            if isinstance(paras, Exception) and _site_down(paras) and not (pq or pscript or rendered):
+                # a plain web page whose site is down: check the Wayback Machine (a removed page, 404/410, is not)
                 akey = ("archive", url, fm.get("archive_url"))
                 if akey not in sources:
                     sources[akey] = _archived_paras(url, fm.get("archive_url"))
