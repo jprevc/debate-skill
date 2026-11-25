@@ -161,11 +161,20 @@ After every Stage, in this order:
 
 ## Finish
 
-When Stage 6 is done or skipped, update `README.md`: the status line ("finished", the date, how many Evidence Requests are still unmet: `open`, `partial` or `unavailable`), the Report rows, and the Dimension count and groups if they changed. Then give the user:
+When Stage 6 is done or skipped, first clear the `FIGURE … computed` lines the Judge left. For each one, its reply gives the figure id, the value and a formula in calc syntax. The charts belong to neither Side, so the calcs are yours:
+
+1. Run `python3 <skill dir>/scripts/evidence.py calc <folder> "<formula>" --id E-PRIMARY-<next free number> --added-by PRIMARY --stage finish --title "<what the value is, with its unit>" --method "<what each input is, and why the formula combines them so>"`, with `--at` for each input the Judge gave words for. A formula `calc` refuses (an input not in its Evidence, or one that stands in several places) goes back to the Judge's reply and the Evidence: fix the input or add `--at`, and never change a number to make it pass.
+2. Dispatch one Auditor batch on the new calcs, as in Stage 3, with a `Figures:` line naming the figure id and value each calc is for. Append its section to `3-audit.md`.
+3. Name each audited calc in its figure's `note` in `figures.json` (and in `figures-<lang>.json`, when it exists): "Calc: E-PRIMARY-004."
+4. Rerun `report_html.py` (with `--lang` for a Translated Report). The lines are gone when each value matches its calc.
+
+A calc that fails the Audit clears nothing: correct the figure value to what the Auditor found, or drop it from the figure, and list it for the user below. Log the calcs and the batch in `state.md`.
+
+Then update `README.md`: the status line ("finished", the date, how many Evidence Requests are still unmet: `open`, `partial` or `unavailable`), the Report rows, and the Dimension count and groups if they changed. Then give the user:
 - the paths to `outputs/report.html` (the Report with charts and the Confrontation tab; it opens offline in a browser), `outputs/report.md` and `outputs/confrontation.md`
 - any Confrontation issue the Checker still reported after round 2; with `no-confrontation`, one line saying the Confrontation was skipped and that resuming the debate adds it
 - the Judge's three-line summary of the main cruxes
-- any `NUMBER` or `FIGURE … computed` line the Judge left, with its reason
+- any `NUMBER` line the Judge left, with its reason, and any figure value you corrected or dropped because its calc failed the Audit
 - every Evidence Request still unmet (`open`, `partial` or `unavailable`), each with its status; `outputs/report.html` lists them too, with what was tried
 
 Then offer a Short Report in one line: a one-page version of the Report with the detail a click away (see Short Report).
