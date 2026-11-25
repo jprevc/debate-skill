@@ -7,7 +7,8 @@ Writes <debate-folder>/ledger.md and prints problems to stdout, one per line:
   DANGLING    a case file cites an Evidence ID that has no file (possible fabrication)
   UNCITED     an Evidence file no Claim or response cites (case files archived in history/<N>/ by a
               revision count as citing; they are not checked otherwise). A calc cites its inputs, and
-              DANGLING names the calc when an input has no file
+              DANGLING names the calc when an input has no file. A figure in figures.json (or
+              figures-<lang>.json) cites the Evidence its series plot and the calc its note names
   SECTION     a case file lacks a required template heading (headings stay in English)
   BADCLAIM    a Claim line breaks the format in reference/evidence.md, names an unknown
               Dimension, uses another prefix, or lacks the Evidence its type needs
@@ -27,6 +28,7 @@ Writes <debate-folder>/ledger.md and prints problems to stdout, one per line:
 Exit code 0 after a run; problems are for the orchestrator to act on. Exit code 2, with nothing
 written, when the argument is missing or the folder has no evidence/.
 """
+import json
 import re
 import sys
 from pathlib import Path
@@ -315,6 +317,23 @@ def check_confrontation(folder, outdir, evidence):
     return problems
 
 
+def figure_citations(path, evidence):
+    """[(figure id, Evidence IDs)] for the Judge's figures in figures.json or figures-<lang>.json: the Evidence its
+    series plot, and each calc its note names (a calc made at Finish for a figure value)."""
+    try:
+        figs = json.loads(path.read_text(encoding="utf-8")).get("figures", [])
+    except (ValueError, AttributeError):
+        return []  # report_html.py reports a malformed figures file
+    out = []
+    for f in figs if isinstance(figs, list) else []:
+        if not isinstance(f, dict):
+            continue
+        ids = [i for s in f.get("series", []) if isinstance(s, dict) for i in ID_RE.findall(json.dumps(s.get("evidence")))]
+        ids += [i for i in ID_RE.findall(str(f.get("note", ""))) if evidence.get(i, ({}, ""))[0].get("kind") == "calc"]
+        out.append((f.get("id", "?"), list(dict.fromkeys(ids))))
+    return out
+
+
 def main():
     if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
         print(__doc__)
@@ -346,6 +365,11 @@ def main():
         if fm.get("kind") == "calc":
             for i in ID_RE.findall(fm.get("inputs", "")):
                 cited_by.setdefault(i, set()).add(eid)
+
+    for f in sorted(folder.glob("figures.json")) + sorted(folder.glob("figures-*.json")):
+        for fid, ids in figure_citations(f, evidence):
+            for eid in ids:
+                cited_by.setdefault(eid, set()).add(f"figure {fid}")
 
     rows = []
     for eid, (fm, text) in evidence.items():
