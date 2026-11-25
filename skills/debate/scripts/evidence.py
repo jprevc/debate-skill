@@ -15,7 +15,10 @@ Subcommands (run with -h for options):
   search <file> <keyword ...>           keyword hits in a cached text file (also works on any local .txt/.pdf)
   show   <file> <A-B>                   print paragraphs A..B (max 40) of a cached text file
   quote  <folder> <file> <A-B> --id ... write an Evidence file whose Quote/Context are copied from the cached file
-  verify <folder> [ID ...] [--live]     check each Evidence quote against its cached source and/or the live URL
+  calc   <folder> "<formula>" --id ...  write an Evidence file that computes a number from numbers in other Evidence,
+                                        e.g. "E-CON-001:1195 / E-PRO-004:63900 * 100"; verify recomputes it
+  verify <folder> [ID ...] [--live]     check each Evidence quote against its cached source and/or the live URL,
+                                        and recompute each calc
                                         (live: exact | partial | missing | unreachable, or unchanged when the
                                         download is byte-identical to the cached one)
 
@@ -23,11 +26,14 @@ Cached text files have one paragraph per line, so "line" = "paragraph" everywher
 <folder> is the debate's agent/ folder; a project folder that contains agent/ is accepted too.
 """
 import argparse
+import ast
 import datetime
+import decimal
 import hashlib
 import html
 import html.parser
 import json
+import operator
 import os
 import re
 import ssl
@@ -845,6 +851,138 @@ def cmd_quote(a):
     print(f"wrote evidence/{a.id}.md ({len(' '.join(quote_paras))} chars quoted from {rel} L{s}-{e})")
 
 
+# ---------- calc: arithmetic over Evidence ----------
+
+CALC_OPERAND = re.compile(r"\b(E-(?:PRIMARY|USER|PRO|CON)(?:-[A-Z])?-\d{3}):(\d+(?:\.\d+)?)\b")
+CALC_OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
+            ast.Pow: operator.pow}
+
+
+def _calc_result(formula):
+    """(result, [(id, value text)], [constant text], shown formula) of a calc formula, or ValueError.
+
+    An operand is <Evidence ID>:<number as a plain decimal>; any other number is a constant."""
+    operands = []
+
+    def placeholder(m):
+        operands.append((m[1], m[2]))
+        return f"_v{len(operands) - 1}"
+    expr = CALC_OPERAND.sub(placeholder, formula.replace("×", "*").replace("÷", "/").replace("−", "-"))
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError as e:
+        raise ValueError(f"not a formula: {e.msg}") from None
+    constants = []
+
+    def ev(node):
+        if isinstance(node, ast.BinOp) and type(node.op) in CALC_OPS:
+            left, right = ev(node.left), ev(node.right)
+            if isinstance(node.op, ast.Pow) and abs(right) > 100:
+                raise ValueError("exponent above 100")
+            try:
+                return CALC_OPS[type(node.op)](left, right)
+            except (ZeroDivisionError, decimal.InvalidOperation):
+                raise ValueError("division by zero") from None
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+            v = ev(node.operand)
+            return -v if isinstance(node.op, ast.USub) else v
+        if isinstance(node, ast.Name) and re.fullmatch(r"_v\d+", node.id):
+            return decimal.Decimal(operands[int(node.id[2:])][1])
+        if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+            text = ast.get_source_segment(expr, node)
+            constants.append(text)
+            return decimal.Decimal(text)
+        raise ValueError(f"only numbers, Evidence operands (E-PRO-003:1234.5), + - * / ** and brackets are allowed, "
+                         f"not {ast.get_source_segment(expr, node) or type(node).__name__}")
+    with decimal.localcontext() as ctx:
+        ctx.prec = 28
+        result = ev(tree.body)
+    if not operands:
+        raise ValueError("the formula uses no Evidence: write each input as <Evidence ID>:<number>")
+    shown = re.sub(r"_v(\d+)", lambda m: operands[int(m[1])][1], expr)
+    return result, operands, constants, shown
+
+
+def _calc_fmt(d):
+    """A result to 6 significant digits, never fewer than its whole part."""
+    q = d.quantize(decimal.Decimal(1).scaleb(min(0, d.adjusted() - 5)), rounding=decimal.ROUND_HALF_UP)
+    s = format(q, "f")
+    return s.rstrip("0").rstrip(".") if "." in s else s
+
+
+def _calc_inputs(folder, operands):
+    """For each operand, where its value stands in that Evidence's Quote or Context, or a problem."""
+    import numcheck
+    found, problems = [], []
+    for eid, val in operands:
+        p = folder / "evidence" / f"{eid}.md"
+        if not p.exists():
+            problems.append(f"{eid} does not exist")
+            continue
+        text = p.read_text(encoding="utf-8")
+        if re.search(r"^- Result:\s*failed", text, re.M | re.I):
+            problems.append(f"{eid} failed the Audit")
+        v, hit = decimal.Decimal(val), None
+        for name in ("Quote", "Context"):
+            body = numcheck.section(text, name)
+            for n in numcheck.numbers(body, quantities_only=False):
+                if any(abs(pv) == v or abs(pv) * n.scale == v for pv, _ in n.values):
+                    hit = f"{name}: …{body[max(0, n.start - 70):n.start + len(n.text) + 50].strip()}…"
+                    break
+            if hit:
+                break
+        if hit:
+            found.append((eid, val, hit))
+        else:
+            problems.append(f"{val} is not in the Quote or Context of {eid}")
+    return found, problems
+
+
+def cmd_calc(a):
+    folder = Path(a.folder)
+    out = folder / "evidence" / f"{a.id}.md"
+    if out.exists() and not a.force:
+        sys.exit(f"{out} exists; pick the next free ID (or --force to overwrite your own file)")
+    try:
+        result, operands, constants, shown = _calc_result(a.formula)
+    except ValueError as e:
+        sys.exit(f"FAILED: {e}")
+    found, problems = _calc_inputs(folder, operands)
+    if problems:
+        sys.exit("FAILED: " + "; ".join(problems) + ". Copy each input from its Evidence as a plain decimal "
+                 "(36,83 % → 36.83; 1.195 mio → 1195), or quote the Evidence that states it first.")
+    res = _calc_fmt(result)
+    today = datetime.date.today().isoformat()
+    inputs = list(dict.fromkeys(e for e, _ in operands))
+    parts = [
+        "---", f"id: {a.id}", f"added_by: {a.added_by}", f"stage: {a.stage}", "kind: calc",
+        f"url: evidence/{a.id}.md", f"accessed: {today}", f"title: {a.title}", f"author: {a.added_by}",
+        "publisher: evidence.py calc", f"published: {today}", "language: n/a",
+        f"formula: {a.formula}", f"inputs: {', '.join(inputs)}", f"result: {res}", "---", "",
+        "## Quote", "", f"> {shown} = {res}", "", "## Inputs", "",
+        f"Method: {a.method}", "",
+        *[f"- {val} from {eid} ({hit})" for eid, val, hit in found],
+        *([f"- Constants: {', '.join(dict.fromkeys(constants))}"] if constants else []), "",
+        "## Audit", "", "- Quote found:", "- Supports:", "- Cherry-picked:", "- Source Tier:",
+        "- Funder/affiliation:", "- Notes:", "",
+    ]
+    out.write_text("\n".join(parts), encoding="utf-8")
+    print(f"wrote evidence/{a.id}.md: {shown} = {res}")
+
+
+def _calc_verify(folder, fm):
+    """recomputed | differs: … | input: … for a calc Evidence file."""
+    try:
+        result, operands, _, _ = _calc_result(fm.get("formula", ""))
+    except ValueError as e:
+        return f"formula: {e}"
+    _, problems = _calc_inputs(folder, operands)
+    if problems:
+        return "input: " + "; ".join(problems)
+    res = _calc_fmt(result)
+    return "recomputed" if res == fm.get("result") else f"differs: now {res}, file says {fm.get('result')}"
+
+
 def _section(text, name):
     m = re.search(rf"^## {name}\s*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
     if not m:
@@ -896,6 +1034,9 @@ def cmd_verify(a):
         fm, quote = _front(text), _section(text, "Quote")
         if not quote:
             print(f"| {f.stem} | no quote | — | Quote section empty |")
+            continue
+        if fm.get("kind") == "calc":
+            print(f"| {f.stem} | {_calc_verify(folder, fm)} | — | calc: {fm.get('formula', '')} |")
             continue
         url, note = fm.get("url", ""), []
         cached = "—"
@@ -1009,6 +1150,17 @@ def main():
     p.add_argument("--url", help="override the source URL (default: from the cache metadata)")
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_quote)
+
+    p = sub.add_parser("calc", help="write an Evidence file that computes a number from numbers in other Evidence")
+    p.add_argument("folder")
+    p.add_argument("formula", help='e.g. "E-CON-B-040:5159.12 / (1 - E-PRO-B-046:36.83 / 100)"')
+    p.add_argument("--id", required=True)
+    p.add_argument("--added-by", required=True)
+    p.add_argument("--stage", required=True)
+    p.add_argument("--title", required=True, help="what the result is, e.g. 'Gross wage at which the cap starts, EUR a month'")
+    p.add_argument("--method", required=True, help="one or two sentences: what each input is, and why the formula combines them so")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(fn=cmd_calc)
 
     p = sub.add_parser("verify", help="check Evidence quotes against cached and/or live sources")
     p.add_argument("folder")

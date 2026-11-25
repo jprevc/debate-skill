@@ -12,6 +12,7 @@ Prints problems one per line, like report_html.py:
   SHORT    the short report breaks the template: a missing or unknown section, a card whose heading is not
            a Dimension of the Report, a Dimension with no card, a missing Pro or Con, an unknown figure,
            a bad pin, an Evidence link that is missing, failed the Audit or was never audited
+  NUMBER   a sentence states a number that none of the Evidence it cites contains (see report_html.py)
   BALANCE  one Side gets more than twice the words of the other in a card, or more Exchange turns
   FIGURE   a figure the short report shows is malformed (the checks of report_html.py)
 Exit code 0 always.
@@ -363,7 +364,9 @@ def build(folder, outdir, lang, code):
     if not p.exists():
         print(f"{p.name} missing in {outdir}: write it from templates/report-short.md first")
         return None
-    md = strip_comments(p.read_text(encoding="utf-8"))
+    raw = p.read_text(encoding="utf-8")
+    problems.extend(R.numcheck.check_prose(raw, p.name, folder / "evidence"))
+    md = strip_comments(raw)
     if lang and (outdir / "report-short.md").exists():
         check_mirror((outdir / "report-short.md").read_text(encoding="utf-8"), md, p.name)
     rp = outdir / f"report{sfx}.md"
