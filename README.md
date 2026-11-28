@@ -85,3 +85,8 @@ tests/                 tests for the scripts (not installed); run them with
                        uv run --with markdown==3.7 --with pytest==9.2.0 pytest tests
 GLOSSARY.md, docs/     domain glossary, ADRs and agent docs for developing the skill
 ```
+
+## License
+
+[MIT](LICENSE). The fonts embedded in `skills/debate/assets/fonts.css` keep their own license, the SIL Open Font
+License 1.1 (see `skills/debate/assets/FONTS-LICENSE.md`).
